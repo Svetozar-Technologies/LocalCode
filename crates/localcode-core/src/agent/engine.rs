@@ -108,7 +108,12 @@ impl AgentEngine {
         };
 
         format!(
-            "{}\n\nAvailable tools:\n{}\n\nProject path: {}\n\
+            "{}\n\nAvailable tools:\n{}\n\nProject path: {}\n\n\
+             IMPORTANT: All file paths must be RELATIVE to the project root. \
+             For example, use 'src/main.rs' not '/src/main.rs'. \
+             Use '.' or omit path to refer to the project root directory. \
+             Never use absolute paths like '/home/...' or '~/...'. \
+             Start by listing the project directory to understand its structure.\n\n\
              Use tools to accomplish the task. Call tools one at a time. When done, provide a summary.",
             base,
             tools_desc.join("\n"),
@@ -308,6 +313,12 @@ To use a tool, respond with EXACTLY this format:
 <args>{{"param": "value"}}</args>
 
 Project path: {}
+
+IMPORTANT: All file paths must be RELATIVE to the project root.
+For example, use 'src/main.rs' not '/src/main.rs'.
+Use '.' to refer to the project root directory.
+Never use absolute paths like '/home/...' or '~/...'.
+Start by listing the project directory to understand its structure.
 
 Analyze the task, plan your approach, then use tools step by step.
 After each tool result, decide the next action."#,

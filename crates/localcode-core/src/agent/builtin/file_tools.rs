@@ -8,12 +8,12 @@ pub struct ReadFileTool;
 #[async_trait]
 impl Tool for ReadFileTool {
     fn name(&self) -> &str { "read_file" }
-    fn description(&self) -> &str { "Read a file's contents" }
+    fn description(&self) -> &str { "Read a file's contents. Use paths relative to the project root (e.g. 'src/main.rs', 'README.md')." }
     fn parameters_schema(&self) -> serde_json::Value {
         serde_json::json!({
             "type": "object",
             "properties": {
-                "path": { "type": "string", "description": "File path (relative to project or absolute)" }
+                "path": { "type": "string", "description": "Relative path from project root (e.g. 'src/main.rs')" }
             },
             "required": ["path"]
         })
@@ -33,12 +33,12 @@ pub struct WriteFileTool;
 #[async_trait]
 impl Tool for WriteFileTool {
     fn name(&self) -> &str { "write_file" }
-    fn description(&self) -> &str { "Write content to a file (creates or overwrites)" }
+    fn description(&self) -> &str { "Write content to a file (creates or overwrites). Parent directories are created automatically." }
     fn parameters_schema(&self) -> serde_json::Value {
         serde_json::json!({
             "type": "object",
             "properties": {
-                "path": { "type": "string", "description": "File path" },
+                "path": { "type": "string", "description": "Relative path from project root (e.g. 'src/utils.rs')" },
                 "content": { "type": "string", "description": "Content to write" }
             },
             "required": ["path", "content"]
@@ -65,7 +65,7 @@ impl Tool for EditFileTool {
         serde_json::json!({
             "type": "object",
             "properties": {
-                "path": { "type": "string", "description": "File path" },
+                "path": { "type": "string", "description": "Relative path from project root (e.g. 'src/main.rs')" },
                 "old_text": { "type": "string", "description": "Text to find" },
                 "new_text": { "type": "string", "description": "Replacement text" }
             },
@@ -95,7 +95,7 @@ impl Tool for ListDirTool {
         serde_json::json!({
             "type": "object",
             "properties": {
-                "path": { "type": "string", "description": "Directory path (default: project root)" }
+                "path": { "type": "string", "description": "Relative path from project root (e.g. 'src/' or '.' for root). Defaults to project root." }
             }
         })
     }
@@ -123,12 +123,12 @@ pub struct CreateFileTool;
 #[async_trait]
 impl Tool for CreateFileTool {
     fn name(&self) -> &str { "create_file" }
-    fn description(&self) -> &str { "Create a new empty file" }
+    fn description(&self) -> &str { "Create a new empty file. Parent directories are created automatically." }
     fn parameters_schema(&self) -> serde_json::Value {
         serde_json::json!({
             "type": "object",
             "properties": {
-                "path": { "type": "string", "description": "File path to create" }
+                "path": { "type": "string", "description": "Relative path from project root (e.g. 'src/new_file.rs')" }
             },
             "required": ["path"]
         })
@@ -153,7 +153,7 @@ impl Tool for DeleteFileTool {
         serde_json::json!({
             "type": "object",
             "properties": {
-                "path": { "type": "string", "description": "Path to delete" }
+                "path": { "type": "string", "description": "Relative path from project root (e.g. 'src/old_file.rs')" }
             },
             "required": ["path"]
         })

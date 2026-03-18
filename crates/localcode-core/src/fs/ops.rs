@@ -95,10 +95,22 @@ pub fn read_file(path: &str) -> CoreResult<String> {
 }
 
 pub fn write_file(path: &str, content: &str) -> CoreResult<()> {
+    // Auto-create parent directories
+    if let Some(parent) = Path::new(path).parent() {
+        if !parent.exists() {
+            fs::create_dir_all(parent)?;
+        }
+    }
     Ok(fs::write(path, content)?)
 }
 
 pub fn create_file(path: &str) -> CoreResult<()> {
+    // Auto-create parent directories
+    if let Some(parent) = Path::new(path).parent() {
+        if !parent.exists() {
+            fs::create_dir_all(parent)?;
+        }
+    }
     fs::File::create(path)?;
     Ok(())
 }
@@ -132,10 +144,46 @@ pub fn edit_file(path: &str, old_text: &str, new_text: &str) -> CoreResult<bool>
     }
 }
 
+/// Resolve a path relative to the project root.
+/// All paths are sandboxed to the project directory:
+/// - Relative paths are joined with project_path
+/// - Absolute paths are stripped to relative (e.g. "/src/main.rs" → "src/main.rs")
+/// - `~` paths are treated as relative (stripped)
+/// - Path traversal (`../`) beyond project root is blocked
 pub fn resolve_path(path: &str, project_path: &str) -> String {
-    if path.starts_with('/') {
-        path.to_string()
-    } else {
-        format!("{}/{}", project_path, path)
+    use std::path::{Component, PathBuf};
+
+    // Strip leading indicators that local LLMs sometimes produce
+    let cleaned = path
+        .trim()
+        .strip_prefix("~/").unwrap_or(
+            path.trim()
+                .strip_prefix("~").unwrap_or(
+                    path.trim()
+                        .strip_prefix("/").unwrap_or(path.trim())
+                )
+        );
+
+    // Handle empty or "." path
+    if cleaned.is_empty() || cleaned == "." {
+        return project_path.to_string();
     }
+
+    // Build safe relative path — resolve ".." components but prevent escaping
+    let mut resolved = PathBuf::new();
+    for component in std::path::Path::new(cleaned).components() {
+        match component {
+            Component::Normal(c) => resolved.push(c),
+            Component::CurDir => {} // skip "."
+            Component::ParentDir => {
+                // Allow going up within relative path, but not beyond root
+                if !resolved.pop() {
+                    // Already at root — ignore the ".."
+                }
+            }
+            _ => {} // skip RootDir, Prefix
+        }
+    }
+
+    format!("{}/{}", project_path, resolved.display())
 }
