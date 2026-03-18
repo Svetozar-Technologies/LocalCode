@@ -2,7 +2,45 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { AgentStep } from '../../types';
+import type { AgentStep, FileEntry } from '../../types';
+
+const LANG_MAP: Record<string, string> = {
+  ts: 'typescript', tsx: 'typescriptreact', js: 'javascript', jsx: 'javascriptreact',
+  py: 'python', rs: 'rust', go: 'go', java: 'java', c: 'c', cpp: 'cpp', h: 'c',
+  html: 'html', css: 'css', scss: 'scss', json: 'json', md: 'markdown',
+  yml: 'yaml', yaml: 'yaml', toml: 'toml', sh: 'shell', sql: 'sql',
+  xml: 'xml', svg: 'xml', graphql: 'graphql', swift: 'swift', kt: 'kotlin',
+  rb: 'ruby', php: 'php', lua: 'lua', zig: 'zig', svelte: 'svelte', vue: 'vue',
+};
+
+function getLang(path: string): string {
+  return LANG_MAP[path.split('.').pop()?.toLowerCase() || ''] || 'plaintext';
+}
+
+/** Refresh the file tree from the current project path */
+async function refreshFileTree() {
+  const store = useAppStore.getState();
+  if (!store.projectPath) return;
+  try {
+    const tree = await invoke<FileEntry[]>('read_dir', { path: store.projectPath });
+    store.setFileTree(tree);
+  } catch { /* ignore */ }
+}
+
+/** Open a file in the editor by its absolute path */
+async function openFileInEditor(absPath: string) {
+  try {
+    const content = await invoke<string>('read_file', { path: absPath });
+    const name = absPath.split('/').pop() || absPath;
+    useAppStore.getState().openFile({
+      path: absPath,
+      name,
+      content,
+      language: getLang(absPath),
+      modified: false,
+    });
+  } catch { /* file may not exist yet */ }
+}
 
 function AgentStepView({ step }: { step: AgentStep }) {
   return (
@@ -72,11 +110,33 @@ export default function ChatPanel() {
           store.setProjectPath(folderPath);
           store.setSidebarView('explorer');
           if (store.sidebarWidth === 0) store.setSidebarWidth(260);
-          invoke<import('../../types').FileEntry[]>('read_dir', { path: folderPath })
+          invoke<FileEntry[]>('read_dir', { path: folderPath })
             .then((tree) => {
               useAppStore.getState().setFileTree(tree);
             })
             .catch((err) => console.error('Failed to open folder:', err));
+        }
+      }
+
+      // Auto-refresh file tree and open files when agent writes/creates/edits files
+      if (step.type === 'tool_result' && step.result && !step.result.startsWith('Error')) {
+        const tool = step.tool || '';
+        if (tool === 'write_file' || tool === 'create_file' || tool === 'edit_file' || tool === 'delete_file') {
+          // Refresh file tree
+          refreshFileTree();
+
+          // Auto-open the file in editor (extract path from result)
+          if (tool === 'write_file' || tool === 'edit_file') {
+            const pathMatch = step.result.match(/(?:wrote to|edited) (.+)$/i);
+            if (pathMatch) {
+              openFileInEditor(pathMatch[1]);
+            }
+          } else if (tool === 'create_file') {
+            const pathMatch = step.result.match(/^Created (.+)$/i);
+            if (pathMatch) {
+              openFileInEditor(pathMatch[1]);
+            }
+          }
         }
       }
     });
