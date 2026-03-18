@@ -4,9 +4,16 @@ use localcode_core::llm::openai::OpenAIProvider;
 use localcode_core::llm::anthropic::AnthropicProvider;
 use localcode_core::llm::provider::LLMProvider;
 use std::sync::Arc;
+use serde::Deserialize;
 use tauri::{AppHandle, Emitter};
 
 use super::llm::LLMManager;
+
+#[derive(Debug, Deserialize)]
+pub struct ChatHistoryEntry {
+    pub role: String,
+    pub content: String,
+}
 
 #[tauri::command]
 pub async fn agent_execute(
@@ -15,6 +22,7 @@ pub async fn agent_execute(
     project_path: String,
     current_file: String,
     current_file_content: String,
+    chat_history: Option<Vec<ChatHistoryEntry>>,
     provider_name: Option<String>,
     app: AppHandle,
     state: tauri::State<'_, LLMManager>,
@@ -70,6 +78,25 @@ pub async fn agent_execute(
         engine.initialize(&project_path);
     }
 
+    // Build task with conversation history for memory
+    let full_task = if let Some(ref history) = chat_history {
+        if history.is_empty() {
+            task
+        } else {
+            let mut context = String::from("## Conversation History\nHere is what was discussed previously in this session:\n\n");
+            // Include last 10 messages max to avoid token overflow
+            let start = if history.len() > 10 { history.len() - 10 } else { 0 };
+            for entry in &history[start..] {
+                let role_label = if entry.role == "user" { "User" } else { "Assistant" };
+                context.push_str(&format!("**{}**: {}\n\n", role_label, entry.content));
+            }
+            context.push_str(&format!("## Current Task\n{}", task));
+            context
+        }
+    } else {
+        task
+    };
+
     let ctx = ToolContext {
         project_path,
         current_file: if current_file.is_empty() {
@@ -83,7 +110,7 @@ pub async fn agent_execute(
     let rid = response_id.clone();
 
     let result = engine
-        .execute(&task, &ctx, &move |event| match event {
+        .execute(&full_task, &ctx, &move |event| match event {
             AgentEvent::Step(step) => {
                 let _ = app_clone.emit(
                     "agent-step",

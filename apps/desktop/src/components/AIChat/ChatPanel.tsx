@@ -102,12 +102,21 @@ export default function ChatPanel() {
 
     try {
       if (agentMode) {
+        // Build conversation history for agent memory
+        const history = chatMessages
+          .filter((m) => m.content.trim())
+          .map((m) => ({
+            role: m.role,
+            content: m.content.slice(0, 2000), // trim long messages
+          }));
+
         await invoke('agent_execute', {
           responseId: assistantId,
           task: trimmed,
           projectPath: projectPath || '',
           currentFile: activeFile || '',
           currentFileContent,
+          chatHistory: history,
         });
       } else {
         await invoke('llm_chat', {
