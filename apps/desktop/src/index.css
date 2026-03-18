@@ -607,3 +607,7 @@ html, body, #root {
 .model-dot { width: 8px; height: 8px; border-radius: 50%; }
 .model-dot.connected { background: var(--accent-green); }
 .model-dot.disconnected { background: var(--accent-red); }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

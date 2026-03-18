@@ -361,6 +361,8 @@ function ModelLibrary() {
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [downloadedModels, setDownloadedModels] = useState<DownloadedModel[]>([]);
   const [downloading, setDownloading] = useState<Set<string>>(new Set());
+  const [startingModel, setStartingModel] = useState<string | null>(null);
+  const [modelError, setModelError] = useState<string | null>(null);
   const { downloadProgress, setDownloadProgress, setLLMConfig, setLLMConnected } = useAppStore();
 
   const loadCatalog = useCallback(async () => {
@@ -437,12 +439,18 @@ function ModelLibrary() {
   }, [loadCatalog, loadDownloaded]);
 
   const handleSelectModel = useCallback(async (model: DownloadedModel) => {
+    setStartingModel(model.catalog_id);
+    setModelError(null);
     try {
       await invoke('start_llm_server', { modelPath: model.path });
       setLLMConfig({ modelPath: model.path, modelName: model.name });
       setLLMConnected(true);
-    } catch (e) {
+      setStartingModel(null);
+    } catch (e: any) {
       console.error('Failed to start model:', e);
+      setModelError(String(e));
+      setStartingModel(null);
+      setLLMConnected(false);
     }
   }, [setLLMConfig, setLLMConnected]);
 
@@ -452,6 +460,19 @@ function ModelLibrary() {
       <p style={styles.description}>
         Download and manage local AI models. Models are stored in ~/.localcode/models/.
       </p>
+
+      {/* Status messages */}
+      {startingModel && (
+        <div style={{ padding: '10px 14px', background: '#007acc22', border: '1px solid #007acc44', borderRadius: 6, marginBottom: 12, fontSize: 12, color: '#569cd6', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ width: 12, height: 12, border: '2px solid #569cd6', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite', display: 'inline-block' }} />
+          Starting model server... This may take up to 30 seconds.
+        </div>
+      )}
+      {modelError && (
+        <div style={{ padding: '10px 14px', background: '#f4474722', border: '1px solid #f4474744', borderRadius: 6, marginBottom: 12, fontSize: 12, color: '#f44747' }}>
+          Failed to start model: {modelError}
+        </div>
+      )}
 
       {/* Downloaded models dropdown */}
       {downloadedModels.length > 0 && (
@@ -466,8 +487,9 @@ function ModelLibrary() {
                   if (model) handleSelectModel(model);
                 }}
                 defaultValue=""
+                disabled={!!startingModel}
               >
-                <option value="" disabled>Select a downloaded model...</option>
+                <option value="" disabled>{startingModel ? 'Starting...' : 'Select a downloaded model...'}</option>
                 {downloadedModels.map((m) => (
                   <option key={m.catalog_id} value={m.catalog_id}>
                     {m.name} ({formatBytes(m.size_bytes)})
@@ -554,15 +576,19 @@ function ModelLibrary() {
                 {entry.downloaded && (
                   <>
                     <button
-                      style={styles.saveButton}
+                      style={{
+                        ...styles.saveButton,
+                        ...(startingModel === entry.id ? { opacity: 0.7, cursor: 'wait' } : {}),
+                      }}
+                      disabled={!!startingModel}
                       onClick={() => {
                         const m = downloadedModels.find((dm) => dm.catalog_id === entry.id);
                         if (m) handleSelectModel(m);
                       }}
-                      onMouseEnter={(e) => { (e.target as HTMLElement).style.background = '#1a8ad4'; }}
+                      onMouseEnter={(e) => { if (!startingModel) (e.target as HTMLElement).style.background = '#1a8ad4'; }}
                       onMouseLeave={(e) => { (e.target as HTMLElement).style.background = '#007acc'; }}
                     >
-                      Use Model
+                      {startingModel === entry.id ? 'Starting...' : 'Use Model'}
                     </button>
                     <button
                       style={styles.deleteButton}
