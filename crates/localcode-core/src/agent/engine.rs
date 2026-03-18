@@ -108,13 +108,16 @@ impl AgentEngine {
         };
 
         format!(
-            "{}\n\nAvailable tools:\n{}\n\nProject path: {}\n\n\
-             IMPORTANT: All file paths must be RELATIVE to the project root. \
-             For example, use 'src/main.rs' not '/src/main.rs'. \
-             Use '.' or omit path to refer to the project root directory. \
-             Never use absolute paths like '/home/...' or '~/...'. \
-             Start by listing the project directory to understand its structure.\n\n\
-             Use tools to accomplish the task. Call tools one at a time. When done, provide a summary.",
+            "{}\n\nAvailable tools:\n{}\n\nProject directory: {}\n\n\
+             RULES:\n\
+             - All file paths MUST be relative to the project root (e.g. 'src/main.rs', NOT '/src/main.rs').\n\
+             - Use '.' to refer to the project root directory.\n\
+             - NEVER use absolute paths starting with / or ~.\n\
+             - Use write_file/edit_file/create_file for file operations, NOT run_command with shell commands.\n\
+             - write_file auto-creates parent directories.\n\
+             - Use run_command ONLY for build/test/install commands.\n\
+             - Always start with list_dir to understand the project structure.\n\n\
+             Call tools one at a time. When done, provide a summary.",
             base,
             tools_desc.join("\n"),
             ctx.project_path,
@@ -304,24 +307,34 @@ impl AgentEngine {
 
         let system = format!(
             r#"You are LocalCode Agent, an autonomous AI coding assistant.
-You can use tools to accomplish tasks. Available tools:
+You have these tools available:
 
 {}
 
-To use a tool, respond with EXACTLY this format:
+To use a tool, respond with EXACTLY this XML format:
 <tool>tool_name</tool>
 <args>{{"param": "value"}}</args>
 
-Project path: {}
+You are working in project directory: {}
 
-IMPORTANT: All file paths must be RELATIVE to the project root.
-For example, use 'src/main.rs' not '/src/main.rs'.
-Use '.' to refer to the project root directory.
-Never use absolute paths like '/home/...' or '~/...'.
-Start by listing the project directory to understand its structure.
+RULES:
+1. All file paths MUST be relative to the project root. Example: "src/main.rs", NOT "/src/main.rs"
+2. Use "." to refer to the project root directory
+3. NEVER use absolute paths starting with / or ~
+4. To create files, use write_file (it auto-creates parent directories)
+5. To create directories, use write_file with a file inside: write_file("mydir/.gitkeep", "")
+6. Do NOT use run_command for file operations — use read_file, write_file, edit_file, create_file, delete_file instead
+7. Use run_command ONLY for build/test/install commands like "npm install", "cargo build", "python script.py"
+8. Always start by using list_dir to see the project structure before making changes
 
-Analyze the task, plan your approach, then use tools step by step.
-After each tool result, decide the next action."#,
+WORKFLOW:
+1. First, use list_dir with path "." to see the project
+2. Read relevant files to understand the code
+3. Make changes using write_file or edit_file
+4. Verify with list_dir or read_file
+5. Provide a summary when done
+
+Only call ONE tool at a time. Wait for the result before deciding the next action."#,
             tools_desc.join("\n"),
             ctx.project_path
         );

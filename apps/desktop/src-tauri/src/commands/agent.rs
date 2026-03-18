@@ -40,6 +40,13 @@ pub async fn agent_execute(
         }
     };
 
+    // Default to home directory if no project is open
+    let project_path = if project_path.is_empty() {
+        std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string())
+    } else {
+        project_path
+    };
+
     let mut registry = ToolRegistry::new();
     builtin::register_all(&mut registry);
 
