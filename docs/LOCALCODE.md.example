@@ -1,0 +1,26 @@
+# Project Instructions
+
+## Project Info
+- Description: A web application built with React and Express
+- Language: TypeScript
+- Framework: React 19 + Express
+
+## Build & Test
+- Build: `npm run build`
+- Test: `npm test`
+- Lint: `npm run lint`
+- Dev: `npm run dev`
+
+## Conventions
+- Use TypeScript strict mode
+- Functional components with hooks
+- Use Zustand for state management
+- Write tests for new features
+- Branch naming: feature/*, bugfix/*, chore/*
+- Commit messages: conventional commits format
+
+## Important Notes
+- Database uses PostgreSQL with Prisma ORM
+- Authentication via JWT tokens
+- API follows REST conventions
+- Environment variables in .env.local (not committed)

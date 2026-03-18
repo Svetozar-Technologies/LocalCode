@@ -1,0 +1,20 @@
+{
+  "name": "localcode",
+  "version": "0.2.0",
+  "description": "LocalCode CLI - AI-powered coding assistant for the terminal",
+  "keywords": ["ai", "coding", "assistant", "cli", "llm"],
+  "license": "MIT",
+  "author": "Svetozar Technologies",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/svetozar-technologies/localcode"
+  },
+  "bin": {
+    "localcode": "bin/localcode.js"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "os": ["darwin", "linux", "win32"],
+  "cpu": ["x64", "arm64"]
+}
