@@ -143,6 +143,33 @@ impl Tool for CreateFileTool {
     }
 }
 
+pub struct OpenInEditorTool;
+
+#[async_trait]
+impl Tool for OpenInEditorTool {
+    fn name(&self) -> &str { "open_in_editor" }
+    fn description(&self) -> &str { "Open a folder or file in the editor UI. Use this when the user asks to 'open' a project or folder." }
+    fn parameters_schema(&self) -> serde_json::Value {
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "path": { "type": "string", "description": "Relative path to folder or file to open in the editor (e.g. 'my-project' or 'src/main.rs')" }
+            },
+            "required": ["path"]
+        })
+    }
+    async fn execute(&self, args: serde_json::Value, ctx: &ToolContext) -> Result<String, CoreError> {
+        let path = args["path"].as_str().unwrap_or(".");
+        let full_path = fs::resolve_path(path, &ctx.project_path);
+        let p = std::path::Path::new(&full_path);
+        if p.exists() {
+            Ok(format!("OPEN_IN_EDITOR:{}", full_path))
+        } else {
+            Ok(format!("Error: Path does not exist: {}", full_path))
+        }
+    }
+}
+
 pub struct DeleteFileTool;
 
 #[async_trait]

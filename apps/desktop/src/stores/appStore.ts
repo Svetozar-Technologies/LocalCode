@@ -68,6 +68,12 @@ interface AppState {
   // Agent mode
   agentMode: boolean;
   toggleAgentMode: () => void;
+
+  // AI Chat panel (right side)
+  chatPanelVisible: boolean;
+  toggleChatPanel: () => void;
+  chatPanelWidth: number;
+  setChatPanelWidth: (width: number) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -192,6 +198,12 @@ export const useAppStore = create<AppState>((set) => ({
   // Agent
   agentMode: false,
   toggleAgentMode: () => set((state) => ({ agentMode: !state.agentMode })),
+
+  // AI Chat panel (right side)
+  chatPanelVisible: true,
+  toggleChatPanel: () => set((state) => ({ chatPanelVisible: !state.chatPanelVisible })),
+  chatPanelWidth: 320,
+  setChatPanelWidth: (width) => set({ chatPanelWidth: width }),
 }));
 
 function toggleDirRecursive(tree: FileEntry[], path: string): FileEntry[] {

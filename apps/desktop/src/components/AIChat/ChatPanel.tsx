@@ -62,6 +62,23 @@ export default function ChatPanel() {
           agentSteps: [...(msg.agentSteps || []), step],
         });
       }
+
+      // Handle open_in_editor tool results
+      if (step.type === 'tool_result' && step.tool === 'open_in_editor' && step.result) {
+        const match = step.result.match(/^OPEN_IN_EDITOR:(.+)$/);
+        if (match) {
+          const folderPath = match[1];
+          const store = useAppStore.getState();
+          store.setProjectPath(folderPath);
+          store.setSidebarView('explorer');
+          if (store.sidebarWidth === 0) store.setSidebarWidth(260);
+          invoke<import('../../types').FileEntry[]>('read_dir', { path: folderPath })
+            .then((tree) => {
+              useAppStore.getState().setFileTree(tree);
+            })
+            .catch((err) => console.error('Failed to open folder:', err));
+        }
+      }
     });
 
     return () => {

@@ -56,6 +56,27 @@ function Sidebar() {
   );
 }
 
+function RightPanel() {
+  const { chatPanelWidth } = useAppStore();
+
+  return (
+    <div className="right-panel" style={{ width: chatPanelWidth, minWidth: 280, maxWidth: 600 }}>
+      <div className="sidebar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span>AI Chat</span>
+        <button
+          className="action-btn"
+          onClick={() => useAppStore.getState().toggleChatPanel()}
+          title="Close AI Chat (Cmd+I)"
+          style={{ padding: '2px 6px', fontSize: 11 }}
+        >
+          ✕
+        </button>
+      </div>
+      <ChatPanel />
+    </div>
+  );
+}
+
 function ResizeHandle({
   direction,
   onResize,
@@ -102,7 +123,7 @@ function ResizeHandle({
 }
 
 function App() {
-  const { terminalVisible, sidebarWidth, setSidebarWidth, terminalHeight, setTerminalHeight, toggleTerminal } = useAppStore();
+  const { terminalVisible, sidebarWidth, setSidebarWidth, terminalHeight, setTerminalHeight, toggleTerminal, chatPanelVisible, chatPanelWidth, setChatPanelWidth } = useAppStore();
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -114,7 +135,7 @@ function App() {
         }
         if (e.key === 'i') {
           e.preventDefault();
-          useAppStore.getState().setSidebarView('ai');
+          useAppStore.getState().toggleChatPanel();
         }
         if (e.key === 'b') {
           e.preventDefault();
@@ -158,6 +179,17 @@ function App() {
             </>
           )}
         </div>
+        {chatPanelVisible && (
+          <>
+            <ResizeHandle
+              direction="horizontal"
+              onResize={(delta) => {
+                setChatPanelWidth(Math.max(280, Math.min(600, chatPanelWidth + delta)));
+              }}
+            />
+            <RightPanel />
+          </>
+        )}
       </div>
       <StatusBar />
     </div>

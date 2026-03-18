@@ -16,6 +16,7 @@ pub fn register_all(registry: &mut ToolRegistry) {
     registry.register(Arc::new(file_tools::ListDirTool));
     registry.register(Arc::new(file_tools::CreateFileTool));
     registry.register(Arc::new(file_tools::DeleteFileTool));
+    registry.register(Arc::new(file_tools::OpenInEditorTool));
 
     // Search tools
     registry.register(Arc::new(search_tools::SearchFilesTool));

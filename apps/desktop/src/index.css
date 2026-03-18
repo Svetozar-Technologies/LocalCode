@@ -144,6 +144,15 @@ html, body, #root {
   overflow-x: hidden;
 }
 
+/* Right Panel (AI Chat) */
+.right-panel {
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 /* File Explorer */
 .file-tree-item {
   display: flex;
