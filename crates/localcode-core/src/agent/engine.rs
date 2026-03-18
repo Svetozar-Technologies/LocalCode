@@ -31,7 +31,7 @@ impl AgentEngine {
         Self {
             provider,
             registry,
-            max_iterations: 15,
+            max_iterations: 30,
             system_prompt: String::new(),
             context_manager: None,
             memory_manager: None,
@@ -116,7 +116,9 @@ impl AgentEngine {
              - Use write_file/edit_file/create_file for file operations, NOT run_command with shell commands.\n\
              - write_file auto-creates parent directories.\n\
              - Use run_command ONLY for build/test/install commands.\n\
-             - Always start with list_dir to understand the project structure.\n\n\
+             - Briefly check project with list_dir, then start writing code immediately.\n\
+             - Write complete files with write_file — do NOT create empty files first.\n\
+             - Be efficient — write code directly instead of exploring extensively.\n\n\
              Call tools one at a time. When done, provide a summary.",
             base,
             tools_desc.join("\n"),
@@ -328,12 +330,13 @@ RULES:
 8. Always start by using list_dir to see the project structure before making changes
 
 WORKFLOW:
-1. First, use list_dir with path "." to see the project
-2. Read relevant files to understand the code
-3. Make changes using write_file or edit_file
-4. Verify with list_dir or read_file
-5. Provide a summary when done
+1. Briefly check the project with list_dir (path ".") — do NOT read every file
+2. Start writing code immediately using write_file with full file contents
+3. Only read files if you need to edit existing code
+4. When creating new projects, write complete files — do NOT create empty files first
+5. Provide a brief summary when done
 
+Be efficient — write code directly instead of exploring extensively.
 Only call ONE tool at a time. Wait for the result before deciding the next action."#,
             tools_desc.join("\n"),
             ctx.project_path
