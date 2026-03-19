@@ -19,7 +19,13 @@ impl Tool for ReadFileTool {
         })
     }
     async fn execute(&self, args: serde_json::Value, ctx: &ToolContext) -> Result<String, CoreError> {
-        let path = args["path"].as_str().unwrap_or("");
+        let path = args["path"].as_str()
+            .or_else(|| args["file_path"].as_str())
+            .or_else(|| args["filename"].as_str())
+            .unwrap_or("");
+        if path.is_empty() {
+            return Ok("Error: 'path' parameter is required.".to_string());
+        }
         let full_path = fs::resolve_path(path, &ctx.project_path);
         match fs::read_file(&full_path) {
             Ok(content) => Ok(content.chars().take(8000).collect()),
@@ -45,8 +51,18 @@ impl Tool for WriteFileTool {
         })
     }
     async fn execute(&self, args: serde_json::Value, ctx: &ToolContext) -> Result<String, CoreError> {
-        let path = args["path"].as_str().unwrap_or("");
+        // Accept both "path" and "file_path" (models sometimes use either)
+        let path = args["path"].as_str()
+            .or_else(|| args["file_path"].as_str())
+            .or_else(|| args["filename"].as_str())
+            .unwrap_or("");
         let content = args["content"].as_str().unwrap_or("");
+        if path.is_empty() {
+            return Ok("Error: 'path' parameter is required. Use: {\"path\": \"file.py\", \"content\": \"...\"}".to_string());
+        }
+        if content.is_empty() {
+            return Ok("Error: 'content' parameter is empty. You must provide the full file content.".to_string());
+        }
         let full_path = fs::resolve_path(path, &ctx.project_path);
         match fs::write_file(&full_path, content) {
             Ok(_) => Ok(format!("Successfully wrote to {}", full_path)),

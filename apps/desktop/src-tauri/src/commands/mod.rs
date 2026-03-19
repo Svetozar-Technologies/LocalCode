@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod chat;
 pub mod debug;
 pub mod fs;
 pub mod git;

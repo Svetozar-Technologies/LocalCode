@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { AgentStep, FileEntry } from '../../types';
+import type { AgentStep, FileEntry, ChatSessionInfo, ChatSearchResult } from '../../types';
 import MentionPopup, { type MentionOption } from './MentionPopup';
 
 const LANG_MAP: Record<string, string> = {
@@ -46,21 +46,92 @@ async function openFileInEditor(absPath: string) {
 /** Track original file contents before agent writes (for diff review) */
 const pendingOriginals: Record<string, string> = {};
 
+// Friendly messages for different agent actions
+function getStepEmoji(step: AgentStep): string {
+  if (step.type === 'thinking') {
+    if (step.content?.startsWith('Plan')) return '📋';
+    if (step.content?.includes('Step')) return '⚡';
+    return '🤔';
+  }
+  if (step.type === 'tool_call') {
+    if (step.tool === 'write_file') return '✍️';
+    if (step.tool === 'run_command') return '🚀';
+    if (step.tool === 'read_file') return '📖';
+    if (step.tool === 'edit_file') return '🔧';
+    if (step.tool === 'list_dir') return '📂';
+    return '🔨';
+  }
+  if (step.type === 'tool_result') {
+    if (step.result?.includes('Error') || step.result?.includes('ERROR')) return '⚠️';
+    return '✅';
+  }
+  return '💬';
+}
+
+function getFriendlyLabel(step: AgentStep): string {
+  if (step.type === 'thinking') {
+    if (step.content?.startsWith('Planning')) return 'Planning your project...';
+    if (step.content?.startsWith('Plan:')) return 'Here\'s the game plan';
+    if (step.content?.includes('Step')) return step.content || 'Working on it...';
+    if (step.content?.includes('failed')) return 'Switching to direct mode...';
+    return step.content || 'Thinking...';
+  }
+  if (step.type === 'tool_call') {
+    const args = step.args as Record<string, unknown> | undefined;
+    if (step.tool === 'write_file') {
+      const path = (args?.path || args?.file_path || 'file') as string;
+      return `Writing ${path}...`;
+    }
+    if (step.tool === 'run_command') {
+      const cmd = (args?.command || '') as string;
+      if (cmd.includes('pip') || cmd.includes('npm')) return `Installing packages...`;
+      if (cmd.includes('python') || cmd.includes('node')) return `Running your code...`;
+      return `Running command...`;
+    }
+    if (step.tool === 'read_file') return 'Reading file...';
+    if (step.tool === 'edit_file') return 'Fixing code...';
+    if (step.tool === 'list_dir') return 'Looking around...';
+    return `Using ${step.tool}...`;
+  }
+  if (step.type === 'tool_result') {
+    if (step.result?.includes('Successfully wrote')) return 'File created!';
+    if (step.result?.includes('Error') || step.result?.includes('ERROR')) return 'Hit a snag, fixing it...';
+    return 'Done!';
+  }
+  return step.type;
+}
+
 function AgentStepView({ step }: { step: AgentStep }) {
+  const [expanded, setExpanded] = useState(false);
+  const emoji = getStepEmoji(step);
+  const label = getFriendlyLabel(step);
+  const hasDetails = (step.type === 'tool_call' && step.args) ||
+    (step.type === 'tool_result' && step.result) ||
+    (step.type === 'thinking' && step.content && step.content.includes('\n'));
+
   return (
     <div className="agent-step">
-      <div className="step-type">
-        {step.type === 'tool_call' ? `Tool: ${step.tool}` : step.type}
+      <div
+        className={`step-header ${hasDetails ? 'clickable' : ''}`}
+        onClick={() => hasDetails && setExpanded(!expanded)}
+      >
+        <span className="step-emoji">{emoji}</span>
+        <span className="step-label">{label}</span>
+        {hasDetails && <span className="step-toggle">{expanded ? '▾' : '▸'}</span>}
       </div>
-      <div className="step-content">
-        {step.type === 'tool_call' && step.args && (
-          <pre style={{ margin: 0, fontSize: 11 }}>{JSON.stringify(step.args, null, 2)}</pre>
-        )}
-        {step.type === 'tool_result' && step.result && (
-          <pre style={{ margin: 0, fontSize: 11, maxHeight: 100, overflow: 'auto' }}>{step.result}</pre>
-        )}
-        {step.content && <span>{step.content}</span>}
-      </div>
+      {expanded && (
+        <div className="step-details">
+          {step.type === 'tool_call' && step.args && (
+            <pre>{JSON.stringify(step.args, null, 2)}</pre>
+          )}
+          {step.type === 'tool_result' && step.result && (
+            <pre>{step.result}</pre>
+          )}
+          {step.type === 'thinking' && step.content && (
+            <pre>{step.content}</pre>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -80,6 +151,8 @@ export default function ChatPanel() {
     selectedProvider, setSelectedProvider,
     agentPlanMode, setAgentPlanMode, agentPlan, setAgentPlan,
     createCheckpoint, restoreCheckpoint, checkpoints,
+    activeChatSessionId, setActiveChatSessionId,
+    chatSessions, setChatSessions,
   } = useAppStore();
 
   const [input, setInput] = useState('');
@@ -91,9 +164,154 @@ export default function ChatPanel() {
   const [chatImages, setChatImages] = useState<string[]>([]);
   const [slashCommands, setSlashCommands] = useState<string[]>([]);
   const [showSlashPopup, setShowSlashPopup] = useState(false);
+  const [showSessionSwitcher, setShowSessionSwitcher] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<ChatSearchResult[]>([]);
+  const [showSearch, setShowSearch] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
+
+  // ── Chat Persistence: Initialize session on mount / project change ──
+  useEffect(() => {
+    const initSession = async () => {
+      try {
+        const sessions = await invoke<ChatSessionInfo[]>('chat_list_sessions', {
+          projectPath: projectPath || undefined,
+          limit: 50,
+        });
+        setChatSessions(sessions);
+
+        if (sessions.length > 0) {
+          // Load most recent session
+          const latest = sessions[0];
+          setActiveChatSessionId(latest.id);
+          const messages = await invoke<{ id: string; chat_session_id: string; role: string; content: string; timestamp: number; agent_steps: string | null }[]>(
+            'chat_get_messages',
+            { sessionId: latest.id }
+          );
+          // Load persisted messages into Zustand
+          clearChat();
+          for (const msg of messages) {
+            addChatMessage({
+              id: msg.id,
+              role: msg.role as 'user' | 'assistant' | 'system',
+              content: msg.content,
+              timestamp: msg.timestamp,
+              agentSteps: msg.agent_steps ? JSON.parse(msg.agent_steps) : undefined,
+            });
+          }
+        } else {
+          // Create new session
+          const session = await invoke<ChatSessionInfo>('chat_create_session', {
+            projectPath: projectPath || '',
+            title: 'New Chat',
+          });
+          setActiveChatSessionId(session.id);
+          setChatSessions([session]);
+          clearChat();
+        }
+      } catch (err) {
+        console.error('Failed to init chat session:', err);
+      }
+    };
+    initSession();
+  }, [projectPath]);
+
+  // ── Persist messages fire-and-forget ──
+  const persistMessage = useCallback((msg: { id: string; role: string; content: string; timestamp: number; agentSteps?: AgentStep[] }) => {
+    if (!activeChatSessionId) return;
+    invoke('chat_add_message', {
+      id: msg.id,
+      chatSessionId: activeChatSessionId,
+      role: msg.role,
+      content: msg.content,
+      timestamp: msg.timestamp,
+      agentSteps: msg.agentSteps ? JSON.stringify(msg.agentSteps) : null,
+    }).catch(console.error);
+  }, [activeChatSessionId]);
+
+  const persistMessageUpdate = useCallback((id: string, content: string, agentSteps?: AgentStep[]) => {
+    invoke('chat_update_message', {
+      id,
+      content,
+      agentSteps: agentSteps ? JSON.stringify(agentSteps) : null,
+    }).catch(console.error);
+  }, []);
+
+  // ── Persist streaming completion ──
+  useEffect(() => {
+    // When streaming ends, persist the final assistant message
+    if (!isAIStreaming) {
+      const lastMsg = chatMessages[chatMessages.length - 1];
+      if (lastMsg && lastMsg.role === 'assistant' && lastMsg.content) {
+        persistMessageUpdate(lastMsg.id, lastMsg.content, lastMsg.agentSteps);
+      }
+    }
+  }, [isAIStreaming]);
+
+  // ── Switch session ──
+  const switchSession = useCallback(async (sessionId: string) => {
+    try {
+      const messages = await invoke<{ id: string; chat_session_id: string; role: string; content: string; timestamp: number; agent_steps: string | null }[]>(
+        'chat_get_messages',
+        { sessionId }
+      );
+      clearChat();
+      for (const msg of messages) {
+        addChatMessage({
+          id: msg.id,
+          role: msg.role as 'user' | 'assistant' | 'system',
+          content: msg.content,
+          timestamp: msg.timestamp,
+          agentSteps: msg.agent_steps ? JSON.parse(msg.agent_steps) : undefined,
+        });
+      }
+      setActiveChatSessionId(sessionId);
+      setShowSessionSwitcher(false);
+    } catch (err) {
+      console.error('Failed to switch session:', err);
+    }
+  }, [clearChat, addChatMessage, setActiveChatSessionId]);
+
+  // ── New chat (keeps old session in DB) ──
+  const startNewChat = useCallback(async () => {
+    try {
+      const session = await invoke<ChatSessionInfo>('chat_create_session', {
+        projectPath: projectPath || '',
+        title: 'New Chat',
+      });
+      setActiveChatSessionId(session.id);
+      clearChat();
+      // Refresh session list
+      const sessions = await invoke<ChatSessionInfo[]>('chat_list_sessions', {
+        projectPath: projectPath || undefined,
+        limit: 50,
+      });
+      setChatSessions(sessions);
+    } catch (err) {
+      console.error('Failed to start new chat:', err);
+    }
+  }, [projectPath, clearChat, setActiveChatSessionId, setChatSessions]);
+
+  // ── Search chat history ──
+  const handleSearch = useCallback(async (query: string) => {
+    setSearchQuery(query);
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    try {
+      const results = await invoke<ChatSearchResult[]>('chat_search', {
+        query,
+        projectPath: projectPath || undefined,
+        topK: 10,
+      });
+      setSearchResults(results);
+    } catch (err) {
+      console.error('Chat search failed:', err);
+    }
+  }, [projectPath]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -296,17 +514,20 @@ export default function ChatPanel() {
       timestamp: Date.now(),
     };
     addChatMessage(userMsg);
+    persistMessage(userMsg);
     setInput('');
     setChatImages([]);
 
     const assistantId = `assistant-${Date.now()}`;
-    addChatMessage({
+    const assistantMsg = {
       id: assistantId,
-      role: 'assistant',
+      role: 'assistant' as const,
       content: '',
       timestamp: Date.now(),
       agentSteps: agentMode ? [] : undefined,
-    });
+    };
+    addChatMessage(assistantMsg);
+    persistMessage(assistantMsg);
 
     setAIStreaming(true);
 
@@ -423,7 +644,7 @@ export default function ChatPanel() {
       });
       setAIStreaming(false);
     }
-  }, [input, isAIStreaming, agentMode, agentPlanMode, agentPlan, chatMessages, activeFile, openFiles, projectPath, addChatMessage, updateChatMessage, setAIStreaming, mentionContext, selectedProvider, chatImages, createCheckpoint, setAgentPlan]);
+  }, [input, isAIStreaming, agentMode, agentPlanMode, agentPlan, chatMessages, activeFile, openFiles, projectPath, addChatMessage, updateChatMessage, setAIStreaming, mentionContext, selectedProvider, chatImages, createCheckpoint, setAgentPlan, persistMessage]);
 
   // Execute plan (Feature 7)
   const executePlan = useCallback(async () => {
@@ -650,6 +871,91 @@ export default function ChatPanel() {
         </button>
       </div>
 
+      {/* Session switcher */}
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderBottom: '1px solid var(--border-color)', fontSize: 11 }}>
+        <span
+          style={{ cursor: 'pointer', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}
+          onClick={() => setShowSessionSwitcher(!showSessionSwitcher)}
+          title="Switch chat session"
+        >
+          {chatSessions.find((s) => s.id === activeChatSessionId)?.title || 'New Chat'} ▾
+        </span>
+        <span
+          style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}
+          onClick={() => setShowSearch(!showSearch)}
+          title="Search chat history"
+        >
+          &#x1F50D;
+        </span>
+        <span
+          style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14 }}
+          onClick={startNewChat}
+          title="New chat"
+        >
+          +
+        </span>
+        {showSessionSwitcher && chatSessions.length > 0 && (
+          <div style={{
+            position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30,
+            background: 'var(--bg-secondary)', border: '1px solid var(--border-color)',
+            borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            maxHeight: 240, overflow: 'auto',
+          }}>
+            {chatSessions.map((s) => (
+              <div
+                key={s.id}
+                onClick={() => switchSession(s.id)}
+                style={{
+                  padding: '6px 10px', cursor: 'pointer', fontSize: 11,
+                  background: s.id === activeChatSessionId ? 'var(--bg-hover)' : 'transparent',
+                  borderBottom: '1px solid var(--border-color)',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = s.id === activeChatSessionId ? 'var(--bg-hover)' : 'transparent'; }}
+              >
+                <div style={{ color: 'var(--text-primary)', fontWeight: s.id === activeChatSessionId ? 600 : 400 }}>{s.title}</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+                  {new Date(s.updated_at * 1000).toLocaleDateString()} · {s.message_count} msgs
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* Search bar */}
+      {showSearch && (
+        <div style={{ padding: '4px 8px', borderBottom: '1px solid var(--border-color)' }}>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            placeholder="Search chat history..."
+            style={{
+              width: '100%', background: 'var(--bg-primary)', border: '1px solid var(--border-color)',
+              borderRadius: 3, padding: '3px 6px', fontSize: 11, color: 'var(--text-primary)',
+              outline: 'none',
+            }}
+          />
+          {searchResults.length > 0 && (
+            <div style={{ maxHeight: 200, overflow: 'auto', marginTop: 4 }}>
+              {searchResults.map((r) => (
+                <div
+                  key={r.message_id}
+                  onClick={() => { switchSession(r.chat_session_id); setShowSearch(false); setSearchQuery(''); setSearchResults([]); }}
+                  style={{ padding: '4px 6px', cursor: 'pointer', fontSize: 10, borderBottom: '1px solid var(--border-color)' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+                >
+                  <div style={{ color: 'var(--accent)', fontSize: 10 }}>{r.session_title}</div>
+                  <div style={{ color: 'var(--text-secondary)' }}>{r.content.slice(0, 100)}...</div>
+                  <div style={{ color: 'var(--text-muted)' }}>{r.role} · score: {r.score.toFixed(2)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="agent-toggle">
         <label>
           <input type="checkbox" checked={agentMode} onChange={toggleAgentMode} />
@@ -666,7 +972,7 @@ export default function ChatPanel() {
             Plan First
           </label>
         )}
-        <span style={{ marginLeft: 'auto', cursor: 'pointer', color: 'var(--text-muted)' }} onClick={clearChat}>
+        <span style={{ marginLeft: 'auto', cursor: 'pointer', color: 'var(--text-muted)' }} onClick={startNewChat}>
           Clear
         </span>
       </div>

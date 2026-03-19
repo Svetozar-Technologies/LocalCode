@@ -77,3 +77,33 @@ export interface TerminalSession {
   id: string;
   title: string;
 }
+
+export interface ChatSessionInfo {
+  id: string;
+  project_path: string;
+  session_id: string;
+  title: string;
+  created_at: number;
+  updated_at: number;
+  message_count: number;
+  summary: string;
+}
+
+export interface ChatSearchResult {
+  message_id: string;
+  chat_session_id: string;
+  session_title: string;
+  role: string;
+  content: string;
+  timestamp: number;
+  score: number;
+}
+
+export interface PersistedChatMessage {
+  id: string;
+  chat_session_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: number;
+  agent_steps?: string;
+}

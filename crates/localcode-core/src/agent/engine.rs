@@ -360,26 +360,39 @@ impl AgentEngine {
             .collect();
 
         let system = format!(
-            r#"You are an AI agent that completes tasks by calling tools. You MUST ONLY respond with a tool call using the XML format below. NEVER explain what you will do. NEVER write plain text. Just call the tool.
+            r#"You are an AI coding agent. You complete tasks by calling ONE tool at a time using XML format.
 
-FORMAT (use this EXACTLY):
+RULES:
+1. ALWAYS write code to a file FIRST using write_file, THEN run it with run_command.
+2. ONE command per tool call. Never chain commands with && or ;
+3. Do NOT install packages preemptively. Only install when you get an import error.
+4. Keep code complete and self-contained in a single file when possible.
+5. After successful run_command, respond with plain text summary to finish.
+
+FORMAT:
 <tool>TOOL_NAME</tool>
 <args>JSON_ARGS</args>
 
-EXAMPLE - User says "create hello.py with hello world":
+EXAMPLE - "create a snake game":
+Step 1: Write the code
 <tool>write_file</tool>
-<args>{{"path": "hello.py", "content": "print('Hello World')"}}</args>
-
-EXAMPLE - User says "list files":
-<tool>list_dir</tool>
-<args>{{"path": "."}}</args>
+<args>{{"path": "snake.py", "content": "import pygame\nimport random\n...full game code..."}}</args>
+Step 2 (after write success): Run it
+<tool>run_command</tool>
+<args>{{"command": "python3 snake.py"}}</args>
+Step 3 (if import error): Install missing package
+<tool>run_command</tool>
+<args>{{"command": "pip3 install pygame"}}</args>
+Step 4: Run again
+<tool>run_command</tool>
+<args>{{"command": "python3 snake.py"}}</args>
 
 TOOLS:
 {tools}
 
 PROJECT: {project}
 
-RESPOND WITH A TOOL CALL NOW. NO TEXT. NO EXPLANATION."#,
+Respond with ONE tool call now. Start by writing the code file."#,
             tools = tools_desc.join("\n"),
             project = ctx.project_path
         );
@@ -397,7 +410,7 @@ RESPOND WITH A TOOL CALL NOW. NO TEXT. NO EXPLANATION."#,
         for _iteration in 0..self.max_iterations {
             let opts = ChatOptions {
                 temperature: 0.3,
-                max_tokens: 2048,
+                max_tokens: 4096,
                 stream: false,
                 system: Some(system.clone()),
                 ..Default::default()
@@ -514,16 +527,16 @@ RESPOND WITH A TOOL CALL NOW. NO TEXT. NO EXPLANATION."#,
                     tool_call_id: None,
                 });
 
-                // Keep conversation short to stay within context limits
-                // Retain: first message (original task) + last 4 messages (2 exchanges)
-                if conversation.len() > 7 {
+                // Keep conversation within context limits (32K allows more)
+                // Retain: first message (original task) + last 8 messages (4 exchanges)
+                if conversation.len() > 13 {
                     let first = conversation[0].clone();
-                    let tail: Vec<ChatMessage> = conversation[conversation.len()-4..].to_vec();
+                    let tail: Vec<ChatMessage> = conversation[conversation.len()-8..].to_vec();
                     conversation.clear();
                     conversation.push(first);
                     conversation.push(ChatMessage {
                         role: "user".to_string(),
-                        content: "[Previous tool calls omitted for brevity. Continue working on the task.]".to_string(),
+                        content: "[Previous tool calls omitted. Continue working on the task.]".to_string(),
                         tool_calls: None,
                         tool_call_id: None,
                     });
@@ -540,6 +553,296 @@ RESPOND WITH A TOOL CALL NOW. NO TEXT. NO EXPLANATION."#,
         on_event(AgentEvent::Done(msg.clone()));
         self.finalize_session(task, &msg);
         Ok(msg)
+    }
+
+    /// Plan-and-Execute: Break complex tasks into small steps, execute each with fresh context.
+    /// Designed for local models with small context windows (8K).
+    pub async fn execute_planned(
+        &mut self,
+        task: &str,
+        ctx: &ToolContext,
+        on_event: &(dyn Fn(AgentEvent) + Send + Sync),
+    ) -> Result<String, CoreError> {
+        // Phase 1: Planning — ask model to decompose the task into steps
+        on_event(AgentEvent::Step(AgentStep {
+            step_type: "thinking".to_string(),
+            tool: None,
+            args: None,
+            result: None,
+            content: Some("Planning your project... breaking it into manageable steps".to_string()),
+            timestamp: now_ms(),
+        }));
+
+        let plan_system = r#"You are a task planner. Break the user's task into simple steps.
+
+RULES:
+- Put ALL code in ONE single file. Never split into multiple files.
+- Step format: "Write filename.py: detailed description of what the code does"
+- Then: "Run: python3 filename.py"
+- Then: "If import error: pip3 install package_name"
+- Output ONLY a JSON array of strings.
+
+EXAMPLE - "create a chess game":
+["Write chess.py: Complete chess game in one file. Use pygame for graphics. Include: 8x8 board drawing with alternating colors, all chess pieces as unicode characters, piece selection by clicking, valid move highlighting, turn-based play, simple CPU opponent that picks random valid moves. Window 640x640.", "Run: python3 chess.py", "If import error: pip3 install pygame", "Run: python3 chess.py"]
+
+EXAMPLE - "create a todo app":
+["Write todo.py: Complete todo app using Flask in one file. Routes: GET / shows all todos as HTML, POST /add adds a todo, POST /delete/<id> removes one. Use in-memory list. Include HTML templates inline with render_template_string. Run on port 5000.", "Run: python3 todo.py", "If import error: pip3 install flask", "Run: python3 todo.py"]
+
+Output ONLY the JSON array."#;
+
+        let plan_messages = vec![ChatMessage {
+            role: "user".to_string(),
+            content: task.to_string(),
+            tool_calls: None,
+            tool_call_id: None,
+        }];
+
+        let plan_opts = ChatOptions {
+            temperature: 0.3,
+            max_tokens: 2048,
+            stream: false,
+            system: Some(plan_system.to_string()),
+            ..Default::default()
+        };
+
+        let plan_response = self.provider.chat_sync(plan_messages, plan_opts).await?;
+
+        // Parse the plan — extract JSON array from response
+        let steps = parse_plan_steps(&plan_response.content);
+
+        if steps.is_empty() {
+            // Fallback: if planning fails, run as single-step XML execution
+            on_event(AgentEvent::Step(AgentStep {
+                step_type: "thinking".to_string(),
+                tool: None,
+                args: None,
+                result: None,
+                content: Some("Switching to direct mode — let's just build it!".to_string()),
+                timestamp: now_ms(),
+            }));
+            return self.execute_xml(task, ctx, on_event).await;
+        }
+
+        // Emit the plan
+        let plan_text = steps.iter().enumerate()
+            .map(|(i, s)| format!("{}. {}", i + 1, s))
+            .collect::<Vec<_>>()
+            .join("\n");
+        on_event(AgentEvent::Step(AgentStep {
+            step_type: "thinking".to_string(),
+            tool: None,
+            args: None,
+            result: None,
+            content: Some(format!("Plan:\n{}", plan_text)),
+            timestamp: now_ms(),
+        }));
+
+        // Phase 2: Execute each step with fresh context
+        let mut files_created: Vec<String> = Vec::new();
+        let mut completed_steps: Vec<String> = Vec::new();
+
+        for (i, step) in steps.iter().enumerate() {
+            // Skip conditional steps if no error occurred
+            let step_lower = step.to_lowercase();
+            if step_lower.starts_with("if import error") || step_lower.starts_with("if error") {
+                if !completed_steps.last().map_or(false, |s| s.contains("ERROR")) {
+                    continue; // Skip — previous step succeeded
+                }
+            }
+
+            on_event(AgentEvent::Step(AgentStep {
+                step_type: "thinking".to_string(),
+                tool: None,
+                args: None,
+                result: None,
+                content: Some(format!("Step {}/{}: {}", i + 1, steps.len(), step)),
+                timestamp: now_ms(),
+            }));
+
+            // Build step-specific context
+            let step_context = if files_created.is_empty() {
+                step.clone()
+            } else {
+                format!("{}\n\nFiles already created: {}", step, files_created.join(", "))
+            };
+
+            // Execute this single step using XML mode with max 5 iterations
+            let step_result = self.execute_xml_step(&step_context, ctx, on_event, 5).await?;
+
+            // Track results
+            if let Some(ref session) = self.session_state {
+                for f in &session.files_modified {
+                    if !files_created.contains(f) {
+                        files_created.push(f.clone());
+                    }
+                }
+            }
+
+            completed_steps.push(format!("Step {}: {} → {}", i + 1, step,
+                if step_result.contains("ERROR") { "FAILED" } else { "OK" }));
+
+            // If a run_command step succeeded and it was the main "run" step, we might be done
+            if step_lower.starts_with("run") && !step_result.contains("ERROR") && i >= steps.len() - 2 {
+                break;
+            }
+        }
+
+        let summary = format!("Task completed.\nFiles: {}\nSteps: {}",
+            if files_created.is_empty() { "none".to_string() } else { files_created.join(", ") },
+            completed_steps.len()
+        );
+        on_event(AgentEvent::Done(summary.clone()));
+        self.finalize_session(task, &summary);
+        Ok(summary)
+    }
+
+    /// Execute a single step with XML tool calling, limited iterations.
+    /// Returns the last tool result or text response.
+    async fn execute_xml_step(
+        &mut self,
+        step_task: &str,
+        ctx: &ToolContext,
+        on_event: &(dyn Fn(AgentEvent) + Send + Sync),
+        max_iters: usize,
+    ) -> Result<String, CoreError> {
+        let tools_desc: Vec<String> = self
+            .registry
+            .list()
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                let tool = self.registry.get(name).unwrap();
+                format!("{}. {} - {}", i + 1, name, tool.description())
+            })
+            .collect();
+
+        let system = format!(
+            r#"You are a coding agent. Complete the step by calling a tool.
+
+CRITICAL RULES:
+- For "Write X.py: description" → call write_file with COMPLETE working code. NOT stubs. NOT comments. Write every function, every class, every line.
+- For "Run: command" → call run_command.
+- For "If import error: pip3 install X" → call run_command.
+- Parameter name is "path" (NOT "file_path").
+- ONE tool call. No chaining.
+
+FORMAT:
+<tool>TOOL_NAME</tool>
+<args>JSON_ARGS</args>
+
+WRITE_FILE EXAMPLE:
+<tool>write_file</tool>
+<args>{{"path": "game.py", "content": "import pygame\nimport sys\n\npygame.init()\nscreen = pygame.display.set_mode((640, 640))\n... FULL CODE HERE ..."}}</args>
+
+RUN EXAMPLE:
+<tool>run_command</tool>
+<args>{{"command": "python3 game.py"}}</args>
+
+INSTALL EXAMPLE:
+<tool>run_command</tool>
+<args>{{"command": "pip3 install pygame"}}</args>
+
+TOOLS: {tools}
+PROJECT: {project}"#,
+            tools = tools_desc.join("\n"),
+            project = ctx.project_path
+        );
+
+        let mut conversation = vec![ChatMessage {
+            role: "user".to_string(),
+            content: step_task.to_string(),
+            tool_calls: None,
+            tool_call_id: None,
+        }];
+
+        let mut last_result = String::new();
+
+        for _iter in 0..max_iters {
+            let opts = ChatOptions {
+                temperature: 0.3,
+                max_tokens: 8192,
+                stream: false,
+                system: Some(system.clone()),
+                ..Default::default()
+            };
+
+            let response = self.provider.chat_sync(conversation.clone(), opts).await?;
+
+            if let Some((tool_name, args_str)) = parse_xml_tool_call(&response.content) {
+                let args: serde_json::Value =
+                    serde_json::from_str(&args_str).unwrap_or_default();
+
+                on_event(AgentEvent::Step(AgentStep {
+                    step_type: "tool_call".to_string(),
+                    tool: Some(tool_name.clone()),
+                    args: Some(args.clone()),
+                    result: None,
+                    content: None,
+                    timestamp: now_ms(),
+                }));
+
+                self.track_file_modification(&tool_name, &args);
+
+                let result = self
+                    .registry
+                    .execute(&tool_name, args, ctx)
+                    .await
+                    .unwrap_or_else(|e| format!("Error: {}", e));
+
+                let is_error = result.starts_with("[ERROR") || result.starts_with("Error:");
+
+                on_event(AgentEvent::Step(AgentStep {
+                    step_type: "tool_result".to_string(),
+                    tool: Some(tool_name.clone()),
+                    args: None,
+                    result: Some(result.clone()),
+                    content: None,
+                    timestamp: now_ms(),
+                }));
+
+                // Truncate for context
+                let truncated: String = if result.len() > 1500 {
+                    let cut: String = result.chars().take(1200).collect();
+                    format!("{}...[truncated]", cut)
+                } else {
+                    result.clone()
+                };
+
+                last_result = result;
+
+                if is_error {
+                    // Keep going to fix the error
+                    conversation.push(ChatMessage {
+                        role: "assistant".to_string(),
+                        content: response.content,
+                        tool_calls: None,
+                        tool_call_id: None,
+                    });
+                    conversation.push(ChatMessage {
+                        role: "user".to_string(),
+                        content: format!("ERROR: {}\nFix this. If a package is missing, install it. If code has a bug, use edit_file.", truncated),
+                        tool_calls: None,
+                        tool_call_id: None,
+                    });
+                    // Trim conversation to keep within limits (32K allows more)
+                    if conversation.len() > 9 {
+                        let first = conversation[0].clone();
+                        let tail: Vec<ChatMessage> = conversation[conversation.len()-4..].to_vec();
+                        conversation.clear();
+                        conversation.push(first);
+                        conversation.extend(tail);
+                    }
+                } else {
+                    // Success — this step is done
+                    return Ok(last_result);
+                }
+            } else {
+                // Text response — step is done
+                return Ok(response.content);
+            }
+        }
+
+        Ok(last_result)
     }
 
     /// Auto-select between native and XML based on provider capabilities
@@ -645,6 +948,40 @@ fn parse_tool_calls_from_content(content: &str, registry: &ToolRegistry) -> Vec<
     }
 
     Vec::new()
+}
+
+/// Parse plan steps from LLM response. Handles JSON arrays and numbered lists.
+fn parse_plan_steps(content: &str) -> Vec<String> {
+    let trimmed = content.trim();
+
+    // Try JSON array first
+    // Find the first [ and last ] to extract the array
+    if let Some(start) = trimmed.find('[') {
+        if let Some(end) = trimmed.rfind(']') {
+            let json_str = &trimmed[start..=end];
+            if let Ok(arr) = serde_json::from_str::<Vec<String>>(json_str) {
+                if !arr.is_empty() {
+                    return arr;
+                }
+            }
+        }
+    }
+
+    // Fallback: parse numbered list (1. Step one\n2. Step two)
+    let mut steps = Vec::new();
+    for line in trimmed.lines() {
+        let line = line.trim();
+        // Match "1. ", "2. ", "- ", "* " patterns
+        if let Some(rest) = line.strip_prefix(|c: char| c.is_ascii_digit() || c == '-' || c == '*') {
+            let rest = rest.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c == ')' || c == ' ');
+            let rest = rest.trim();
+            if !rest.is_empty() {
+                steps.push(rest.to_string());
+            }
+        }
+    }
+
+    steps
 }
 
 fn parse_xml_tool_call(text: &str) -> Option<(String, String)> {

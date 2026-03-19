@@ -82,6 +82,8 @@ pub struct CompletionOptions {
     pub max_tokens: u32,
     pub temperature: f32,
     pub stop: Vec<String>,
+    #[serde(default)]
+    pub multiline: bool,
 }
 
 impl Default for CompletionOptions {
@@ -90,6 +92,19 @@ impl Default for CompletionOptions {
             max_tokens: 128,
             temperature: 0.2,
             stop: vec!["\n\n".to_string(), "\r\n\r\n".to_string()],
+            multiline: false,
+        }
+    }
+}
+
+impl CompletionOptions {
+    /// Create options for multiline completion with relaxed stop tokens
+    pub fn multiline_default() -> Self {
+        Self {
+            max_tokens: 256,
+            temperature: 0.2,
+            stop: Vec::new(), // language-specific stops are set by the frontend
+            multiline: true,
         }
     }
 }
@@ -146,6 +161,23 @@ pub trait LLMProvider: Send + Sync {
         suffix: &str,
         opts: CompletionOptions,
     ) -> Result<String, CoreError>;
+
+    /// Streaming completion — returns a stream of text chunks.
+    /// Default implementation falls back to non-streaming `complete()`.
+    async fn complete_stream(
+        &self,
+        prompt: &str,
+        suffix: &str,
+        opts: CompletionOptions,
+    ) -> Result<ChatStream, CoreError> {
+        let result = self.complete(prompt, suffix, opts).await?;
+        let (tx, rx) = tokio::sync::mpsc::channel(2);
+        tokio::spawn(async move {
+            let _ = tx.send(Ok(ChatChunk::Text(result))).await;
+            let _ = tx.send(Ok(ChatChunk::Done)).await;
+        });
+        Ok(Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx)))
+    }
 
     async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, CoreError>;
 
@@ -219,5 +251,15 @@ mod tests {
         assert_eq!(opts.max_tokens, 128);
         assert!((opts.temperature - 0.2).abs() < f32::EPSILON);
         assert!(!opts.stop.is_empty());
+        assert!(!opts.multiline);
+    }
+
+    #[test]
+    fn test_completion_options_multiline() {
+        let opts = CompletionOptions::multiline_default();
+
+        assert_eq!(opts.max_tokens, 256);
+        assert!(opts.stop.is_empty());
+        assert!(opts.multiline);
     }
 }

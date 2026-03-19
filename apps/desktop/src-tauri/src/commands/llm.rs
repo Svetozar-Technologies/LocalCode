@@ -154,17 +154,150 @@ pub async fn llm_chat(
 pub async fn llm_complete(
     prompt: String,
     suffix: String,
+    provider_name: Option<String>,
+    multiline: Option<bool>,
+    stop: Option<Vec<String>>,
     state: tauri::State<'_, LLMManager>,
 ) -> Result<String, String> {
-    let local = {
+    let provider: Arc<dyn LLMProvider> = {
         let llm = state.lock().map_err(|e| e.to_string())?;
-        llm.local.clone()
+        let name = provider_name
+            .as_deref()
+            .unwrap_or(&llm.config.default_provider);
+
+        match name {
+            "openai" => {
+                let key = llm.config.get_openai_key();
+                let model = llm.config.get_openai_model();
+                if llm.config.providers.openai.base_url.is_empty() {
+                    Arc::new(OpenAIProvider::new(&key, &model))
+                } else {
+                    Arc::new(OpenAIProvider::with_base_url(
+                        &key,
+                        &llm.config.providers.openai.base_url,
+                        &model,
+                    ))
+                }
+            }
+            "anthropic" => {
+                let key = llm.config.get_anthropic_key();
+                let model = llm.config.get_anthropic_model();
+                Arc::new(AnthropicProvider::new(&key, &model))
+            }
+            _ => llm.local.clone(),
+        }
     };
 
-    local
-        .complete(&prompt, &suffix, CompletionOptions::default())
+    let is_multiline = multiline.unwrap_or(false);
+    let opts = if is_multiline {
+        let mut opts = CompletionOptions::multiline_default();
+        if let Some(s) = stop {
+            opts.stop = s;
+        }
+        opts
+    } else {
+        let mut opts = CompletionOptions::default();
+        if let Some(s) = stop {
+            opts.stop = s;
+        }
+        opts
+    };
+
+    provider
+        .complete(&prompt, &suffix, opts)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn llm_complete_stream(
+    response_id: String,
+    prompt: String,
+    suffix: String,
+    provider_name: Option<String>,
+    multiline: Option<bool>,
+    stop: Option<Vec<String>>,
+    app: AppHandle,
+    state: tauri::State<'_, LLMManager>,
+) -> Result<(), String> {
+    let provider: Arc<dyn LLMProvider> = {
+        let llm = state.lock().map_err(|e| e.to_string())?;
+        let name = provider_name
+            .as_deref()
+            .unwrap_or(&llm.config.default_provider);
+
+        match name {
+            "openai" => {
+                let key = llm.config.get_openai_key();
+                let model = llm.config.get_openai_model();
+                if llm.config.providers.openai.base_url.is_empty() {
+                    Arc::new(OpenAIProvider::new(&key, &model))
+                } else {
+                    Arc::new(OpenAIProvider::with_base_url(
+                        &key,
+                        &llm.config.providers.openai.base_url,
+                        &model,
+                    ))
+                }
+            }
+            "anthropic" => {
+                let key = llm.config.get_anthropic_key();
+                let model = llm.config.get_anthropic_model();
+                Arc::new(AnthropicProvider::new(&key, &model))
+            }
+            _ => llm.local.clone(),
+        }
+    };
+
+    let is_multiline = multiline.unwrap_or(false);
+    let opts = if is_multiline {
+        let mut opts = CompletionOptions::multiline_default();
+        if let Some(s) = stop {
+            opts.stop = s;
+        }
+        opts
+    } else {
+        let mut opts = CompletionOptions::default();
+        if let Some(s) = stop {
+            opts.stop = s;
+        }
+        opts
+    };
+
+    let mut stream = provider
+        .complete_stream(&prompt, &suffix, opts)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    while let Some(chunk) = stream.next().await {
+        match chunk {
+            Ok(ChatChunk::Text(text)) => {
+                let _ = app.emit(
+                    "llm-completion-chunk",
+                    serde_json::json!({"id": response_id, "chunk": text}),
+                );
+            }
+            Ok(ChatChunk::Done) => break,
+            Ok(ChatChunk::Error(e)) => {
+                let _ = app.emit(
+                    "llm-completion-chunk",
+                    serde_json::json!({"id": response_id, "chunk": "", "error": e}),
+                );
+                break;
+            }
+            Err(e) => {
+                let _ = app.emit(
+                    "llm-completion-chunk",
+                    serde_json::json!({"id": response_id, "chunk": "", "error": e.to_string()}),
+                );
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    let _ = app.emit("llm-completion-done", serde_json::json!({"id": response_id}));
+    Ok(())
 }
 
 #[tauri::command]

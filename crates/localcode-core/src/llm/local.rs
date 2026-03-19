@@ -41,12 +41,15 @@ impl LocalProvider {
             let mut proc = self.server_process.lock().map_err(|e| CoreError::Other(e.to_string()))?;
             if let Some(ref mut child) = *proc {
                 let _ = child.kill();
+                let _ = child.wait(); // Reap the zombie process
             }
             *proc = None;
         }
 
         // Kill any orphaned llama-server processes to avoid GPU memory conflicts
         let _ = Command::new("pkill").arg("-f").arg("llama-server").output();
+        // Wait for processes to fully terminate and release GPU memory
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
 
         let model_name = std::path::Path::new(model_path)
             .file_stem()
@@ -56,6 +59,9 @@ impl LocalProvider {
 
         let server_binary = which_llama_server();
 
+        // Determine safe GPU layers based on available system memory
+        let (ctx_size, gpu_layers) = get_safe_params(model_path);
+
         let child = Command::new(&server_binary)
             .arg("-m")
             .arg(model_path)
@@ -64,11 +70,13 @@ impl LocalProvider {
             .arg("--port")
             .arg("8081")
             .arg("-c")
-            .arg("8192")
+            .arg(ctx_size.to_string())
             .arg("-ngl")
-            .arg("99")
+            .arg(gpu_layers.to_string())
             .arg("--chat-template")
             .arg("chatml")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .spawn()
             .map_err(|e| {
                 CoreError::Llm(format!(
@@ -84,9 +92,30 @@ impl LocalProvider {
             *name = model_name.clone();
         }
 
-        // Poll until server is ready
+        // Poll until server is ready — check if process is still alive too
         for _ in 0..60 {
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+            // Check if server process crashed
+            {
+                let mut proc = self.server_process.lock().map_err(|e| CoreError::Other(e.to_string()))?;
+                if let Some(ref mut child) = *proc {
+                    match child.try_wait() {
+                        Ok(Some(status)) => {
+                            *proc = None;
+                            return Err(CoreError::Llm(format!(
+                                "llama-server exited prematurely with status: {}. The model may be too large for available memory.",
+                                status
+                            )));
+                        }
+                        Ok(None) => {} // Still running, good
+                        Err(e) => {
+                            return Err(CoreError::Llm(format!("Failed to check server status: {}", e)));
+                        }
+                    }
+                }
+            }
+
             if let Ok(resp) = self
                 .client
                 .get(format!("{}/health", self.server_url))
@@ -97,6 +126,16 @@ impl LocalProvider {
                     return Ok(model_name);
                 }
             }
+        }
+
+        // Timed out — kill the server process
+        {
+            let mut proc = self.server_process.lock().map_err(|e| CoreError::Other(e.to_string()))?;
+            if let Some(ref mut child) = *proc {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+            *proc = None;
         }
 
         Err(CoreError::Llm(
@@ -352,15 +391,100 @@ impl LLMProvider for LocalProvider {
             "stream": false,
         });
 
-        let response = self
-            .client
-            .post(format!("{}/completion", self.server_url))
-            .json(&body)
-            .send()
-            .await?;
+        let response = tokio::time::timeout(
+            tokio::time::Duration::from_secs(5),
+            self.client
+                .post(format!("{}/completion", self.server_url))
+                .json(&body)
+                .send(),
+        )
+        .await
+        .map_err(|_| CoreError::Llm("Completion request timed out (5s)".to_string()))??;
 
         let result: serde_json::Value = response.json().await?;
         Ok(result["content"].as_str().unwrap_or("").to_string())
+    }
+
+    async fn complete_stream(
+        &self,
+        prompt: &str,
+        suffix: &str,
+        opts: CompletionOptions,
+    ) -> Result<ChatStream, CoreError> {
+        let body = serde_json::json!({
+            "prompt": prompt,
+            "suffix": suffix,
+            "n_predict": opts.max_tokens,
+            "temperature": opts.temperature,
+            "stop": opts.stop,
+            "stream": true,
+        });
+
+        let response = tokio::time::timeout(
+            tokio::time::Duration::from_secs(5),
+            self.client
+                .post(format!("{}/completion", self.server_url))
+                .json(&body)
+                .send(),
+        )
+        .await
+        .map_err(|_| CoreError::Llm("Completion stream request timed out (5s)".to_string()))??;
+
+        let (tx, rx) = tokio::sync::mpsc::channel(100);
+        let mut stream = response.bytes_stream();
+
+        tokio::spawn(async move {
+            let mut buffer = String::new();
+
+            while let Some(chunk) = stream.next().await {
+                match chunk {
+                    Ok(bytes) => {
+                        let text = String::from_utf8_lossy(&bytes);
+                        buffer.push_str(&text);
+
+                        while let Some(pos) = buffer.find('\n') {
+                            let line = buffer[..pos].to_string();
+                            buffer = buffer[pos + 1..].to_string();
+
+                            let line = line.trim();
+                            if !line.starts_with("data: ") {
+                                continue;
+                            }
+                            let data = &line[6..];
+
+                            if let Ok(parsed) =
+                                serde_json::from_str::<serde_json::Value>(data)
+                            {
+                                let stop = parsed["stop"]
+                                    .as_bool()
+                                    .unwrap_or(false);
+                                if stop {
+                                    let _ = tx.send(Ok(ChatChunk::Done)).await;
+                                    return;
+                                }
+                                if let Some(content) = parsed["content"].as_str() {
+                                    if !content.is_empty() {
+                                        let _ = tx
+                                            .send(Ok(ChatChunk::Text(
+                                                content.to_string(),
+                                            )))
+                                            .await;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Err(CoreError::Http(e))).await;
+                        return;
+                    }
+                }
+            }
+
+            let _ = tx.send(Ok(ChatChunk::Done)).await;
+        });
+
+        Ok(Box::pin(ReceiverStream::new(rx)))
     }
 
     async fn embed(&self, _texts: &[String]) -> Result<Vec<Vec<f32>>, CoreError> {
@@ -379,6 +503,50 @@ impl LLMProvider for LocalProvider {
             vision: false,
         }
     }
+}
+
+/// Determine safe context size and GPU layer count based on model size and available memory.
+/// This prevents OOM kernel panics on macOS by being conservative with Metal GPU memory.
+fn get_safe_params(model_path: &str) -> (u32, u32) {
+    // Get model file size in GB as a rough proxy for memory requirements
+    let model_size_gb = std::fs::metadata(model_path)
+        .map(|m| m.len() as f64 / (1024.0 * 1024.0 * 1024.0))
+        .unwrap_or(4.0);
+
+    // Get total system memory in GB (macOS sysctl)
+    let total_mem_gb = Command::new("sysctl")
+        .arg("-n")
+        .arg("hw.memsize")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<u64>().ok())
+        .map(|bytes| bytes as f64 / (1024.0 * 1024.0 * 1024.0))
+        .unwrap_or(8.0);
+
+    // Reserve ~4GB for macOS + app overhead, use the rest for the model
+    let available_for_model = (total_mem_gb - 4.0).max(2.0);
+
+    // Context size: larger models need less context to stay within memory
+    // KV cache memory ≈ ctx_size * n_layers * d_model * 2 * 2 bytes (K+V, fp16)
+    let ctx_size: u32 = if available_for_model > model_size_gb * 2.0 {
+        8192 // Plenty of headroom
+    } else if available_for_model > model_size_gb * 1.5 {
+        4096 // Moderate headroom
+    } else {
+        2048 // Tight — keep context small
+    };
+
+    // GPU layers: offload as many as safely fit
+    // If model fits comfortably, offload all; otherwise be conservative
+    let gpu_layers: u32 = if available_for_model > model_size_gb * 1.8 {
+        99 // Full GPU offload
+    } else if available_for_model > model_size_gb * 1.2 {
+        40 // Partial offload
+    } else {
+        0 // CPU only — not enough memory for GPU offload
+    };
+
+    (ctx_size, gpu_layers)
 }
 
 fn which_llama_server() -> String {

@@ -157,10 +157,10 @@ pub async fn agent_execute(
         }
     };
 
-    // Local models: force XML mode (lighter on tokens, no JSON tool definitions)
+    // Local models: use plan-and-execute (breaks task into small steps for 8K context)
     // Cloud models: auto-select based on provider capabilities
     let result = if is_local {
-        engine.execute_xml(&full_task, &ctx, &event_handler).await
+        engine.execute_planned(&full_task, &ctx, &event_handler).await
     } else {
         engine.execute(&full_task, &ctx, &event_handler).await
     };

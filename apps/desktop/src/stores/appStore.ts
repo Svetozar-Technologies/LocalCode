@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { FileEntry, OpenFile, ChatMessage, SidebarView, GitFileStatus, LLMConfig, BottomPanelTab, DiagnosticProblem, OutputEntry } from '../types';
+import type { FileEntry, OpenFile, ChatMessage, SidebarView, GitFileStatus, LLMConfig, BottomPanelTab, DiagnosticProblem, OutputEntry, ChatSessionInfo } from '../types';
 
 interface AppState {
   // Project
@@ -48,6 +48,12 @@ interface AppState {
   clearChat: () => void;
   isAIStreaming: boolean;
   setAIStreaming: (streaming: boolean) => void;
+
+  // Chat Persistence
+  activeChatSessionId: string | null;
+  chatSessions: ChatSessionInfo[];
+  setActiveChatSessionId: (id: string | null) => void;
+  setChatSessions: (sessions: ChatSessionInfo[]) => void;
 
   // LLM
   llmConfig: LLMConfig;
@@ -253,6 +259,12 @@ export const useAppStore = create<AppState>((set) => ({
   clearChat: () => set({ chatMessages: [] }),
   isAIStreaming: false,
   setAIStreaming: (streaming) => set({ isAIStreaming: streaming }),
+
+  // Chat Persistence
+  activeChatSessionId: null,
+  chatSessions: [],
+  setActiveChatSessionId: (id) => set({ activeChatSessionId: id }),
+  setChatSessions: (sessions) => set({ chatSessions: sessions }),
 
   // LLM
   llmConfig: {

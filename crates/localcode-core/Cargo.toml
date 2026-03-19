@@ -29,6 +29,7 @@ tokio-stream = "0.1"
 pin-project-lite = "0.2"
 notify = { workspace = true }
 urlencoding = "2"
+rusqlite = { version = "0.31", features = ["bundled"] }
 
 [dev-dependencies]
 tempfile = "3"
