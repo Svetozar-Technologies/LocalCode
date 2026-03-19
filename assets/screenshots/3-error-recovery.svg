@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="568" viewBox="0 0 700 568">
+  <defs>
+    <style>
+      .terminal-bg { fill: #1a1b26; }
+      .titlebar { fill: #24283b; }
+      .text { font-family: 'Menlo', 'Monaco', 'Courier New', monospace; font-size: 13px; }
+      .prompt { fill: #7aa2f7; }
+      .command { fill: #c0caf5; }
+      .success { fill: #9ece6a; }
+      .error { fill: #f7768e; }
+      .dim { fill: #565f89; }
+      .warning { fill: #e0af68; }
+      .cyan { fill: #7dcfff; }
+      .magenta { fill: #bb9af7; }
+      .white { fill: #c0caf5; }
+      .bold { font-weight: 700; }
+      .green { fill: #9ece6a; }
+      .yellow { fill: #e0af68; }
+      .blue { fill: #7aa2f7; }
+      .red { fill: #f7768e; }
+    </style>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Window shadow -->
+  <rect x="16" y="16" width="668" height="536" rx="12" fill="none" filter="url(#shadow)"/>
+
+  <!-- Terminal background -->
+  <rect x="16" y="16" width="668" height="536" rx="12" class="terminal-bg"/>
+
+  <!-- Title bar -->
+  <rect x="16" y="16" width="668" height="40" rx="12" class="titlebar"/>
+  <rect x="16" y="44" width="668" height="12" class="titlebar"/>
+
+  <!-- Traffic lights -->
+  <circle cx="40" cy="36" r="7" fill="#ff5f57"/>
+  <circle cx="62" cy="36" r="7" fill="#febc2e"/>
+  <circle cx="84" cy="36" r="7" fill="#28c840"/>
+
+  <!-- Title -->
+  <text x="350" y="41" class="text dim" text-anchor="middle" font-size="12">LocalCode -- Auto Error Recovery</text>
+
+  <!-- Content -->
+  <g transform="translate(36, 76)">
+    <text x="0" y="0" class="text dim">You: </text>
+    <text x="39.0" y="0" class="text white">build a web scraper for HN top stories and run it</text>
+    <text x="0" y="20" class="text white"></text>
+    <text x="0" y="40" class="text magenta">  &gt; </text>
+    <text x="31.2" y="40" class="text cyan">write_file</text>
+    <text x="109.2" y="40" class="text dim">  hn_scraper.py</text>
+    <text x="0" y="60" class="text success">      + </text>
+    <text x="62.4" y="60" class="text dim">Wrote 24 lines</text>
+    <text x="0" y="80" class="text magenta">  &gt; </text>
+    <text x="31.2" y="80" class="text cyan">run_command</text>
+    <text x="117.0" y="80" class="text dim">  python3 hn_scraper.py</text>
+    <text x="0" y="100" class="text error">      X </text>
+    <text x="62.4" y="100" class="text error">[ERROR exit_code=1]</text>
+    <text x="0" y="120" class="text white">        </text>
+    <text x="62.4" y="120" class="text error">NameError: name &#x27;soup&#x27; is not defined (line 12)</text>
+    <text x="0" y="140" class="text white"></text>
+    <text x="0" y="160" class="text magenta">  &gt; </text>
+    <text x="31.2" y="160" class="text cyan">read_file</text>
+    <text x="101.4" y="160" class="text dim">  hn_scraper.py (checking line 12)</text>
+    <text x="0" y="180" class="text magenta">  &gt; </text>
+    <text x="31.2" y="180" class="text cyan">edit_file</text>
+    <text x="101.4" y="180" class="text dim">  Fixed: added soup = BeautifulSoup(resp.text)</text>
+    <text x="0" y="200" class="text success">      + </text>
+    <text x="62.4" y="200" class="text dim">Applied 1 edit</text>
+    <text x="0" y="220" class="text magenta">  &gt; </text>
+    <text x="31.2" y="220" class="text cyan">run_command</text>
+    <text x="117.0" y="220" class="text dim">  python3 hn_scraper.py</text>
+    <text x="0" y="240" class="text success">      + </text>
+    <text x="62.4" y="240" class="text success">Top 5 Hacker News Stories:</text>
+    <text x="0" y="260" class="text white">        </text>
+    <text x="62.4" y="260" class="text white">1. Show HN: I built an AI that debugs itself  (342 pts)</text>
+    <text x="0" y="280" class="text white">        </text>
+    <text x="62.4" y="280" class="text white">2. Rust is eating the world                    (289 pts)</text>
+    <text x="0" y="300" class="text white">        </text>
+    <text x="62.4" y="300" class="text white">3. Why local LLMs are the future               (256 pts)</text>
+    <text x="0" y="320" class="text white">        </text>
+    <text x="62.4" y="320" class="text white">4. The death of SaaS subscriptions             (198 pts)</text>
+    <text x="0" y="340" class="text white">        </text>
+    <text x="62.4" y="340" class="text white">5. Open source AI tools you should know        (187 pts)</text>
+    <text x="0" y="360" class="text white"></text>
+    <text x="0" y="380" class="text cyan">  Agent: </text>
+    <text x="70.2" y="380" class="text white">Done! Scraped top 5 stories from Hacker News.</text>
+    <text x="0" y="400" class="text white">  </text>
+    <text x="15.6" y="400" class="text dim">Fixed a NameError (missing BeautifulSoup init) on first try.</text>
+  </g>
+</svg>

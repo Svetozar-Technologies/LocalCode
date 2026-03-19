@@ -23,6 +23,30 @@ Built with [Tauri v2](https://tauri.app/) (Rust backend), [React](https://react.
 
 ---
 
+## See It In Action
+
+### Self-Healing Agent — writes code, detects errors, fixes them, retries automatically
+<p align="center">
+  <img src="assets/screenshots/1-self-healing-agent.png" alt="Self-Healing Agent" width="680"/>
+</p>
+
+### Error Recovery — reads the traceback, patches the bug, reruns
+<p align="center">
+  <img src="assets/screenshots/3-error-recovery.png" alt="Auto Error Recovery" width="680"/>
+</p>
+
+### Session Memory — every session stored permanently, searchable by keyword
+<p align="center">
+  <img src="assets/screenshots/2-session-memory.png" alt="Session Memory & Search" width="680"/>
+</p>
+
+### Quick Start — clone, build, run in 2 minutes
+<p align="center">
+  <img src="assets/screenshots/4-quick-start.png" alt="Quick Start" width="680"/>
+</p>
+
+---
+
 ## Features
 
 ### Code Editor

@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="668" viewBox="0 0 700 668">
+  <defs>
+    <style>
+      .terminal-bg { fill: #1a1b26; }
+      .titlebar { fill: #24283b; }
+      .text { font-family: 'Menlo', 'Monaco', 'Courier New', monospace; font-size: 13px; }
+      .prompt { fill: #7aa2f7; }
+      .command { fill: #c0caf5; }
+      .success { fill: #9ece6a; }
+      .error { fill: #f7768e; }
+      .dim { fill: #565f89; }
+      .warning { fill: #e0af68; }
+      .cyan { fill: #7dcfff; }
+      .magenta { fill: #bb9af7; }
+      .white { fill: #c0caf5; }
+      .bold { font-weight: 700; }
+      .green { fill: #9ece6a; }
+      .yellow { fill: #e0af68; }
+      .blue { fill: #7aa2f7; }
+      .red { fill: #f7768e; }
+    </style>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Window shadow -->
+  <rect x="16" y="16" width="668" height="636" rx="12" fill="none" filter="url(#shadow)"/>
+
+  <!-- Terminal background -->
+  <rect x="16" y="16" width="668" height="636" rx="12" class="terminal-bg"/>
+
+  <!-- Title bar -->
+  <rect x="16" y="16" width="668" height="40" rx="12" class="titlebar"/>
+  <rect x="16" y="44" width="668" height="12" class="titlebar"/>
+
+  <!-- Traffic lights -->
+  <circle cx="40" cy="36" r="7" fill="#ff5f57"/>
+  <circle cx="62" cy="36" r="7" fill="#febc2e"/>
+  <circle cx="84" cy="36" r="7" fill="#28c840"/>
+
+  <!-- Title -->
+  <text x="350" y="41" class="text dim" text-anchor="middle" font-size="12">LocalCode -- Session Memory &amp; Search</text>
+
+  <!-- Content -->
+  <g transform="translate(36, 76)">
+    <text x="0" y="0" class="text dim">You: </text>
+    <text x="39.0" y="0" class="text cyan">/sessions</text>
+    <text x="0" y="20" class="text white"></text>
+    <text x="0" y="40" class="text cyan bold">  Recent Sessions</text>
+    <text x="0" y="60" class="text dim">  -----------------------------------------------------------</text>
+    <text x="0" y="80" class="text white">  </text>
+    <text x="15.6" y="80" class="text yellow">a3f8c2</text>
+    <text x="62.4" y="80" class="text dim">  2026-03-19 14:32  </text>
+    <text x="218.4" y="80" class="text blue">LocalCode    </text>
+    <text x="319.8" y="80" class="text white">Self-healing agent implementation</text>
+    <text x="0" y="100" class="text white">  </text>
+    <text x="15.6" y="100" class="text yellow">b7d1e5</text>
+    <text x="62.4" y="100" class="text dim">  2026-03-18 09:15  </text>
+    <text x="218.4" y="100" class="text blue">WebApp       </text>
+    <text x="319.8" y="100" class="text white">React auth system with JWT</text>
+    <text x="0" y="120" class="text white">  </text>
+    <text x="15.6" y="120" class="text yellow">c9a4f0</text>
+    <text x="62.4" y="120" class="text dim">  2026-03-17 16:45  </text>
+    <text x="218.4" y="120" class="text blue">PythonML     </text>
+    <text x="319.8" y="120" class="text white">Snake game with pygame</text>
+    <text x="0" y="140" class="text white">  </text>
+    <text x="15.6" y="140" class="text yellow">d2b6c8</text>
+    <text x="62.4" y="140" class="text dim">  2026-03-16 11:20  </text>
+    <text x="218.4" y="140" class="text blue">DataPipeline </text>
+    <text x="319.8" y="140" class="text white">CSV parser with error handling</text>
+    <text x="0" y="160" class="text white">  </text>
+    <text x="15.6" y="160" class="text yellow">e5f3a1</text>
+    <text x="62.4" y="160" class="text dim">  2026-03-15 08:30  </text>
+    <text x="218.4" y="160" class="text blue">API-Server   </text>
+    <text x="319.8" y="160" class="text white">REST API with rate limiting</text>
+    <text x="0" y="180" class="text dim">  -----------------------------------------------------------</text>
+    <text x="0" y="200" class="text white">  </text>
+    <text x="15.6" y="200" class="text dim">5 sessions</text>
+    <text x="93.6" y="200" class="text dim"> across </text>
+    <text x="156.0" y="200" class="text dim">5 projects</text>
+    <text x="0" y="220" class="text white"></text>
+    <text x="0" y="240" class="text white"></text>
+    <text x="0" y="260" class="text dim">You: </text>
+    <text x="39.0" y="260" class="text cyan">/sessions search snake game</text>
+    <text x="0" y="280" class="text white"></text>
+    <text x="0" y="300" class="text cyan bold">  Search Results</text>
+    <text x="124.8" y="300" class="text dim"> for &quot;snake game&quot;</text>
+    <text x="0" y="320" class="text dim">  -----------------------------------------------------------</text>
+    <text x="0" y="340" class="text white">  </text>
+    <text x="15.6" y="340" class="text green">* </text>
+    <text x="31.2" y="340" class="text yellow">c9a4f0</text>
+    <text x="78.0" y="340" class="text white">  </text>
+    <text x="93.6" y="340" class="text white">Snake game with pygame</text>
+    <text x="265.2" y="340" class="text green">  [0.94]</text>
+    <text x="0" y="360" class="text white">    </text>
+    <text x="31.2" y="360" class="text dim">PythonML  |  2026-03-17  |  python, pygame, game</text>
+    <text x="0" y="380" class="text dim">  -----------------------------------------------------------</text>
+    <text x="0" y="400" class="text white"></text>
+    <text x="0" y="420" class="text white"></text>
+    <text x="0" y="440" class="text dim">You: </text>
+    <text x="39.0" y="440" class="text cyan">/recall snake game</text>
+    <text x="0" y="460" class="text white"></text>
+    <text x="0" y="480" class="text success">  OK </text>
+    <text x="39.0" y="480" class="text green">Loaded session context: Snake game with pygame</text>
+    <text x="0" y="500" class="text white">  </text>
+    <text x="15.6" y="500" class="text dim">Files: snake.py, assets/  |  Tags: python, pygame, game</text>
+  </g>
+</svg>
