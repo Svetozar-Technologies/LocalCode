@@ -24,10 +24,10 @@ const styles = {
     borderRadius: 3,
   } as React.CSSProperties,
   frameHover: {
-    background: '#2a2d2e',
+    background: 'var(--bg-hover)',
   } as React.CSSProperties,
   frameIndex: {
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     fontSize: 10,
     width: 16,
     textAlign: 'right' as const,
@@ -39,7 +39,7 @@ const styles = {
     fontSize: 12,
   } as React.CSSProperties,
   frameLocation: {
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     fontSize: 11,
     marginLeft: 'auto',
     overflow: 'hidden',
@@ -49,7 +49,7 @@ const styles = {
     flexShrink: 0,
   } as React.CSSProperties,
   empty: {
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     fontSize: 12,
     padding: '8px 0',
   } as React.CSSProperties,
@@ -70,7 +70,7 @@ export default function CallStack({ frames, onFrameClick }: CallStackProps) {
             style={styles.frame}
             onClick={() => onFrameClick?.(frame)}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.background = '#2a2d2e';
+              (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLElement).style.background = 'transparent';

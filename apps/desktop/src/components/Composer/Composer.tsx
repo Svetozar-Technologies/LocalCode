@@ -19,21 +19,21 @@ const styles = {
     display: 'flex',
     flexDirection: 'column' as const,
     height: '100%',
-    background: '#1e1e1e',
+    background: 'var(--bg-primary)',
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   } as React.CSSProperties,
   header: {
     display: 'flex',
     alignItems: 'center',
     padding: '10px 16px',
-    borderBottom: '1px solid #3c3c3c',
-    background: '#252526',
+    borderBottom: '1px solid var(--border-color)',
+    background: 'var(--bg-secondary)',
     gap: 8,
   } as React.CSSProperties,
   title: {
     fontSize: 13,
     fontWeight: 600,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
   } as React.CSSProperties,
   badge: {
     background: '#c586c0',
@@ -52,14 +52,14 @@ const styles = {
   } as React.CSSProperties,
   inputArea: {
     padding: 16,
-    borderBottom: '1px solid #3c3c3c',
+    borderBottom: '1px solid var(--border-color)',
   } as React.CSSProperties,
   textarea: {
     width: '100%',
-    background: '#3c3c3c',
-    border: '1px solid #3c3c3c',
+    background: 'var(--border-color)',
+    border: '1px solid var(--border-color)',
     borderRadius: 6,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     padding: '10px 12px',
     fontSize: 13,
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -90,16 +90,16 @@ const styles = {
   } as React.CSSProperties,
   cancelButton: {
     background: 'none',
-    border: '1px solid #3c3c3c',
+    border: '1px solid var(--border-color)',
     borderRadius: 4,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     padding: '7px 16px',
     cursor: 'pointer',
     fontSize: 12,
   } as React.CSSProperties,
   hint: {
     fontSize: 11,
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
   } as React.CSSProperties,
   changesArea: {
     flex: 1,
@@ -111,14 +111,14 @@ const styles = {
     justifyContent: 'flex-end',
     gap: 8,
     padding: '10px 16px',
-    borderTop: '1px solid #3c3c3c',
-    background: '#252526',
+    borderTop: '1px solid var(--border-color)',
+    background: 'var(--bg-secondary)',
   } as React.CSSProperties,
   acceptAllButton: {
     background: '#4ec9b0',
     border: 'none',
     borderRadius: 4,
-    color: '#1e1e1e',
+    color: 'var(--bg-primary)',
     padding: '6px 16px',
     cursor: 'pointer',
     fontSize: 12,
@@ -140,25 +140,25 @@ const styles = {
     justifyContent: 'center',
     padding: 40,
     gap: 12,
-    color: '#969696',
+    color: 'var(--text-secondary)',
   } as React.CSSProperties,
   spinner: {
     width: 24,
     height: 24,
-    border: '2px solid #3c3c3c',
+    border: '2px solid var(--border-color)',
     borderTop: '2px solid #007acc',
     borderRadius: '50%',
     animation: 'spin 0.8s linear infinite',
   } as React.CSSProperties,
   summary: {
     padding: '12px 16px',
-    background: '#2d2d2d',
-    borderBottom: '1px solid #3c3c3c',
+    background: 'var(--bg-tertiary)',
+    borderBottom: '1px solid var(--border-color)',
     display: 'flex',
     alignItems: 'center',
     gap: 16,
     fontSize: 12,
-    color: '#969696',
+    color: 'var(--text-secondary)',
   } as React.CSSProperties,
   errorText: {
     color: '#f44747',
@@ -179,13 +179,13 @@ function getLanguageFromPath(path: string): string {
 
 function getStatusColor(status: ComposerStatus): string {
   switch (status) {
-    case 'idle': return '#6a6a6a';
+    case 'idle': return 'var(--text-muted)';
     case 'composing': return '#007acc';
     case 'reviewing': return '#dcdcaa';
     case 'applying': return '#c586c0';
     case 'done': return '#4ec9b0';
     case 'error': return '#f44747';
-    default: return '#6a6a6a';
+    default: return 'var(--text-muted)';
   }
 }
 

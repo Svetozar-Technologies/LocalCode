@@ -1,7 +1,7 @@
 import { useAppStore } from '../../stores/appStore';
 
 export default function StatusBar() {
-  const { activeFile, openFiles, currentBranch, llmConnected, llmConfig, agentMode, problems, setBottomPanelTab, completionStatus } = useAppStore();
+  const { activeFile, openFiles, currentBranch, llmConnected, llmConfig, agentMode, problems, setBottomPanelTab, completionStatus, selectedProvider } = useAppStore();
 
   const currentFile = openFiles.find((f) => f.path === activeFile);
   const ext = activeFile?.split('.').pop() || '';
@@ -58,6 +58,22 @@ export default function StatusBar() {
             No Model
           </>
         )}
+      </span>
+      <span
+        className="status-item"
+        style={{
+          background: selectedProvider === 'local' || selectedProvider === 'ollama'
+            ? 'rgba(78, 201, 176, 0.25)'
+            : 'rgba(86, 156, 214, 0.25)',
+          color: selectedProvider === 'local' || selectedProvider === 'ollama' ? '#4ec9b0' : '#569cd6',
+          padding: '0 6px',
+          borderRadius: 3,
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: '0.5px',
+        }}
+      >
+        {selectedProvider === 'local' || selectedProvider === 'ollama' ? 'LOCAL' : 'CLOUD'}
       </span>
       {completionStatus === 'completing' && (
         <span className="status-item" style={{ color: '#dcdcaa' }}>

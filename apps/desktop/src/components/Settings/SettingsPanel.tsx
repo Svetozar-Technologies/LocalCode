@@ -1,8 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import LLMSettings from './LLMSettings';
+import MCPSettings from './MCPSettings';
 
-type SettingsSection = 'general' | 'editor' | 'llm' | 'agent' | 'keybindings';
+type SettingsSection = 'general' | 'editor' | 'llm' | 'agent' | 'keybindings' | 'mcp' | 'remote' | 'collaboration';
 
 interface SettingsSectionItem {
   id: SettingsSection;
@@ -14,14 +15,14 @@ const styles = {
   container: {
     display: 'flex',
     height: '100%',
-    background: '#1e1e1e',
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    background: 'var(--bg-primary)',
+    fontFamily: 'var(--font-ui)',
   } as React.CSSProperties,
   sidebar: {
     width: 200,
     minWidth: 200,
-    background: '#252526',
-    borderRight: '1px solid #3c3c3c',
+    background: 'var(--bg-secondary)',
+    borderRight: '1px solid var(--border-color)',
     display: 'flex',
     flexDirection: 'column' as const,
     overflow: 'auto',
@@ -30,8 +31,8 @@ const styles = {
     padding: '16px 16px 12px',
     fontSize: 13,
     fontWeight: 600,
-    color: '#cccccc',
-    borderBottom: '1px solid #3c3c3c',
+    color: 'var(--text-primary)',
+    borderBottom: '1px solid var(--border-color)',
   } as React.CSSProperties,
   navItem: {
     display: 'flex',
@@ -40,14 +41,14 @@ const styles = {
     padding: '8px 16px',
     cursor: 'pointer',
     fontSize: 13,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     borderLeft: '2px solid transparent',
     transition: 'color 0.1s, background 0.1s',
   } as React.CSSProperties,
   navItemActive: {
-    color: '#cccccc',
-    background: '#2a2d2e',
-    borderLeftColor: '#007acc',
+    color: 'var(--text-primary)',
+    background: 'var(--bg-hover)',
+    borderLeftColor: 'var(--accent)',
   } as React.CSSProperties,
   content: {
     flex: 1,
@@ -57,10 +58,10 @@ const styles = {
   sectionTitle: {
     fontSize: 18,
     fontWeight: 600,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     marginBottom: 20,
     paddingBottom: 8,
-    borderBottom: '1px solid #3c3c3c',
+    borderBottom: '1px solid var(--border-color)',
   } as React.CSSProperties,
   settingGroup: {
     marginBottom: 24,
@@ -68,32 +69,32 @@ const styles = {
   settingLabel: {
     fontSize: 13,
     fontWeight: 500,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     marginBottom: 4,
   } as React.CSSProperties,
   settingDescription: {
     fontSize: 12,
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     marginBottom: 8,
     lineHeight: 1.5,
   } as React.CSSProperties,
   input: {
     width: '100%',
     maxWidth: 400,
-    background: '#3c3c3c',
-    border: '1px solid #3c3c3c',
+    background: 'var(--bg-input)',
+    border: '1px solid var(--border-color)',
     borderRadius: 4,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     padding: '6px 10px',
     fontSize: 13,
     outline: 'none',
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontFamily: 'var(--font-ui)',
   } as React.CSSProperties,
   select: {
-    background: '#3c3c3c',
-    border: '1px solid #3c3c3c',
+    background: 'var(--bg-input)',
+    border: '1px solid var(--border-color)',
     borderRadius: 4,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     padding: '6px 10px',
     fontSize: 13,
     outline: 'none',
@@ -105,43 +106,43 @@ const styles = {
     gap: 8,
     cursor: 'pointer',
     fontSize: 13,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
   } as React.CSSProperties,
   checkboxInput: {
-    accentColor: '#007acc',
+    accentColor: 'var(--accent)',
     width: 14,
     height: 14,
   } as React.CSSProperties,
   slider: {
     width: '100%',
     maxWidth: 300,
-    accentColor: '#007acc',
+    accentColor: 'var(--accent)',
   } as React.CSSProperties,
   sliderValue: {
     fontSize: 12,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     marginLeft: 8,
-    fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', 'Menlo', monospace",
+    fontFamily: 'var(--font-mono)',
   } as React.CSSProperties,
   keybindingRow: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '8px 0',
-    borderBottom: '1px solid #2d2d2d',
+    borderBottom: '1px solid var(--bg-tertiary)',
     fontSize: 13,
   } as React.CSSProperties,
   keybindingAction: {
-    color: '#cccccc',
+    color: 'var(--text-primary)',
   } as React.CSSProperties,
   kbd: {
-    background: '#2d2d2d',
-    border: '1px solid #3c3c3c',
+    background: 'var(--bg-tertiary)',
+    border: '1px solid var(--border-color)',
     borderRadius: 3,
     padding: '2px 8px',
-    fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', 'Menlo', monospace",
+    fontFamily: 'var(--font-mono)',
     fontSize: 12,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
   } as React.CSSProperties,
 };
 
@@ -191,30 +192,55 @@ const SECTIONS: SettingsSectionItem[] = [
       </svg>
     ),
   },
+  {
+    id: 'mcp',
+    label: 'MCP Servers',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M14 3.5l-5-2-5 2v9l5 2 5-2v-9zM9 12.63l-4-1.6V4.37l4 1.6v6.66zm1-6.66l4-1.6v6.66l-4 1.6V5.97z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'remote',
+    label: 'Remote Dev',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M14.5 2h-13l-.5.5v11l.5.5h13l.5-.5V2.5l-.5-.5zM14 13H2V3h12v10zM4 11h3v1H4v-1zm5 0h3v1H9v-1z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'collaboration',
+    label: 'Collaboration',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+        <path d="M12 6a3 3 0 100-6 3 3 0 000 6zm-8 0a3 3 0 100-6 3 3 0 000 6zm8 2c-2.33 0-7 1.17-7 3.5V14h14v-2.5C20 9.17 14.33 8 12 8zM4 8C1.67 8-3 9.17-3 11.5V14h7v-2.5c0-.72.22-1.34.59-1.87C3.48 8.79 1.93 8 0 8z" />
+      </svg>
+    ),
+  },
 ];
 
 const KEYBINDINGS = [
   { action: 'Open File', shortcut: 'Cmd+P' },
   { action: 'Save File', shortcut: 'Cmd+S' },
+  { action: 'Find in File', shortcut: 'Cmd+F' },
+  { action: 'Find in Files', shortcut: 'Cmd+Shift+F' },
   { action: 'Toggle Terminal', shortcut: 'Cmd+`' },
   { action: 'Toggle Sidebar', shortcut: 'Cmd+B' },
   { action: 'AI Chat', shortcut: 'Cmd+I' },
   { action: 'Inline Edit', shortcut: 'Cmd+K' },
-  { action: 'Find in File', shortcut: 'Cmd+F' },
-  { action: 'Find in Files', shortcut: 'Cmd+Shift+F' },
+  { action: 'Split Editor', shortcut: 'Cmd+\\' },
+  { action: 'Composer', shortcut: 'Cmd+Shift+I' },
   { action: 'Go to Line', shortcut: 'Ctrl+G' },
   { action: 'Command Palette', shortcut: 'Cmd+Shift+P' },
   { action: 'Close Tab', shortcut: 'Cmd+W' },
   { action: 'New Terminal', shortcut: 'Ctrl+Shift+`' },
-  { action: 'Split Editor', shortcut: 'Cmd+\\' },
   { action: 'Toggle Word Wrap', shortcut: 'Alt+Z' },
 ];
 
 function GeneralSettings() {
-  const { theme, setTheme } = useAppStore();
-  const [autoSave, setAutoSave] = useState(true);
-  const [autoSaveDelay, setAutoSaveDelay] = useState(1000);
-  const [telemetry, setTelemetry] = useState(false);
+  const { theme, setTheme, autoSave, setAutoSave, autoSaveDelay, setAutoSaveDelay } = useAppStore();
 
   return (
     <>
@@ -222,7 +248,7 @@ function GeneralSettings() {
 
       <div style={styles.settingGroup}>
         <div style={styles.settingLabel}>Theme</div>
-        <div style={styles.settingDescription}>Select the color theme for the editor.</div>
+        <div style={styles.settingDescription}>Select the color theme for the editor and UI.</div>
         <select
           style={styles.select}
           value={theme}
@@ -246,7 +272,7 @@ function GeneralSettings() {
           Auto Save
         </label>
         <div style={styles.settingDescription}>
-          Automatically save files after a delay.
+          Automatically save files after a delay when you stop typing.
         </div>
         {autoSave && (
           <div style={{ display: 'flex', alignItems: 'center', marginTop: 6 }}>
@@ -262,21 +288,6 @@ function GeneralSettings() {
             <span style={styles.sliderValue}>{autoSaveDelay}ms</span>
           </div>
         )}
-      </div>
-
-      <div style={styles.settingGroup}>
-        <label style={styles.checkbox}>
-          <input
-            type="checkbox"
-            style={styles.checkboxInput}
-            checked={telemetry}
-            onChange={(e) => setTelemetry(e.target.checked)}
-          />
-          Enable Telemetry
-        </label>
-        <div style={styles.settingDescription}>
-          Send anonymous usage data to help improve LocalCode. No code or file contents are ever sent.
-        </div>
       </div>
     </>
   );
@@ -357,62 +368,34 @@ function EditorSettings() {
 
       <div style={styles.settingGroup}>
         <label style={styles.checkbox}>
-          <input
-            type="checkbox"
-            style={styles.checkboxInput}
-            checked={wordWrap}
-            onChange={(e) => setWordWrap(e.target.checked)}
-          />
+          <input type="checkbox" style={styles.checkboxInput} checked={wordWrap} onChange={(e) => setWordWrap(e.target.checked)} />
           Word Wrap
         </label>
-        <div style={styles.settingDescription}>
-          Controls if lines should wrap or scroll horizontally.
-        </div>
+        <div style={styles.settingDescription}>Controls if lines should wrap or scroll horizontally.</div>
       </div>
 
       <div style={styles.settingGroup}>
         <label style={styles.checkbox}>
-          <input
-            type="checkbox"
-            style={styles.checkboxInput}
-            checked={minimap}
-            onChange={(e) => setMinimap(e.target.checked)}
-          />
+          <input type="checkbox" style={styles.checkboxInput} checked={minimap} onChange={(e) => setMinimap(e.target.checked)} />
           Minimap
         </label>
-        <div style={styles.settingDescription}>
-          Controls whether the minimap is shown.
-        </div>
+        <div style={styles.settingDescription}>Controls whether the minimap is shown.</div>
       </div>
 
       <div style={styles.settingGroup}>
         <label style={styles.checkbox}>
-          <input
-            type="checkbox"
-            style={styles.checkboxInput}
-            checked={bracketPairs}
-            onChange={(e) => setBracketPairs(e.target.checked)}
-          />
+          <input type="checkbox" style={styles.checkboxInput} checked={bracketPairs} onChange={(e) => setBracketPairs(e.target.checked)} />
           Bracket Pair Colorization
         </label>
-        <div style={styles.settingDescription}>
-          Controls whether bracket pair colorization is enabled.
-        </div>
+        <div style={styles.settingDescription}>Controls whether bracket pair colorization is enabled.</div>
       </div>
 
       <div style={styles.settingGroup}>
         <label style={styles.checkbox}>
-          <input
-            type="checkbox"
-            style={styles.checkboxInput}
-            checked={fontLigatures}
-            onChange={(e) => setFontLigatures(e.target.checked)}
-          />
+          <input type="checkbox" style={styles.checkboxInput} checked={fontLigatures} onChange={(e) => setFontLigatures(e.target.checked)} />
           Font Ligatures
         </label>
-        <div style={styles.settingDescription}>
-          Enables font ligatures for supported fonts.
-        </div>
+        <div style={styles.settingDescription}>Enables font ligatures for supported fonts.</div>
       </div>
     </>
   );
@@ -439,9 +422,7 @@ function AgentSettings() {
 
   const toggleTool = (toolId: string) => {
     setAllowedTools((prev) =>
-      prev.includes(toolId)
-        ? prev.filter((t) => t !== toolId)
-        : [...prev, toolId]
+      prev.includes(toolId) ? prev.filter((t) => t !== toolId) : [...prev, toolId]
     );
   };
 
@@ -451,69 +432,37 @@ function AgentSettings() {
 
       <div style={styles.settingGroup}>
         <div style={styles.settingLabel}>Max Steps</div>
-        <div style={styles.settingDescription}>
-          Maximum number of steps the agent can take per task.
-        </div>
+        <div style={styles.settingDescription}>Maximum number of steps the agent can take per task.</div>
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <input
-            type="range"
-            style={styles.slider}
-            min={1}
-            max={50}
-            value={maxSteps}
-            onChange={(e) => setMaxSteps(Number(e.target.value))}
-          />
+          <input type="range" style={styles.slider} min={1} max={50} value={maxSteps} onChange={(e) => setMaxSteps(Number(e.target.value))} />
           <span style={styles.sliderValue}>{maxSteps}</span>
         </div>
       </div>
 
       <div style={styles.settingGroup}>
         <label style={styles.checkbox}>
-          <input
-            type="checkbox"
-            style={styles.checkboxInput}
-            checked={autoApprove}
-            onChange={(e) => setAutoApprove(e.target.checked)}
-          />
+          <input type="checkbox" style={styles.checkboxInput} checked={autoApprove} onChange={(e) => setAutoApprove(e.target.checked)} />
           Auto-Approve Tool Calls
         </label>
-        <div style={styles.settingDescription}>
-          Automatically approve agent tool calls without confirmation. Use with caution.
-        </div>
+        <div style={styles.settingDescription}>Automatically approve agent tool calls without confirmation. Use with caution.</div>
       </div>
 
       <div style={styles.settingGroup}>
         <label style={styles.checkbox}>
-          <input
-            type="checkbox"
-            style={styles.checkboxInput}
-            checked={sandboxEnabled}
-            onChange={(e) => setSandboxEnabled(e.target.checked)}
-          />
+          <input type="checkbox" style={styles.checkboxInput} checked={sandboxEnabled} onChange={(e) => setSandboxEnabled(e.target.checked)} />
           Sandbox Mode
         </label>
-        <div style={styles.settingDescription}>
-          Run agent commands in a sandboxed environment for safety.
-        </div>
+        <div style={styles.settingDescription}>Run agent commands in a sandboxed environment for safety.</div>
       </div>
 
       <div style={styles.settingGroup}>
         <div style={styles.settingLabel}>Allowed Tools</div>
-        <div style={styles.settingDescription}>
-          Select which tools the agent is allowed to use.
-        </div>
+        <div style={styles.settingDescription}>Select which tools the agent is allowed to use.</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
           {ALL_TOOLS.map((tool) => (
             <label key={tool.id} style={styles.checkbox}>
-              <input
-                type="checkbox"
-                style={styles.checkboxInput}
-                checked={allowedTools.includes(tool.id)}
-                onChange={() => toggleTool(tool.id)}
-              />
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>
-                {tool.label}
-              </span>
+              <input type="checkbox" style={styles.checkboxInput} checked={allowedTools.includes(tool.id)} onChange={() => toggleTool(tool.id)} />
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{tool.label}</span>
             </label>
           ))}
         </div>
@@ -541,6 +490,70 @@ function KeybindingsSettings() {
   );
 }
 
+function MCPSettingsSection() {
+  return (
+    <>
+      <h2 style={styles.sectionTitle}>MCP Servers</h2>
+      <div style={styles.settingDescription}>
+        Configure Model Context Protocol (MCP) servers to extend AI capabilities with external tools and data sources.
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <MCPSettings />
+      </div>
+    </>
+  );
+}
+
+function RemoteDevSettings() {
+  return (
+    <>
+      <h2 style={styles.sectionTitle}>Remote Development</h2>
+      <div style={{
+        padding: '32px 24px',
+        textAlign: 'center',
+        color: 'var(--text-muted)',
+        fontSize: 13,
+      }}>
+        <svg width="48" height="48" viewBox="0 0 16 16" fill="var(--text-muted)" style={{ opacity: 0.3, marginBottom: 12 }}>
+          <path d="M14.5 2h-13l-.5.5v11l.5.5h13l.5-.5V2.5l-.5-.5zM14 13H2V3h12v10z" />
+        </svg>
+        <p style={{ fontWeight: 600, marginBottom: 8 }}>Coming Soon</p>
+        <p>Connect to remote machines via SSH and develop directly on them. Remote development support is planned for a future release.</p>
+        <div style={{ marginTop: 20, opacity: 0.5 }}>
+          <div style={styles.settingGroup}>
+            <div style={styles.settingLabel}>SSH Host</div>
+            <input style={{ ...styles.input, opacity: 0.5 }} placeholder="user@hostname" disabled />
+          </div>
+          <div style={styles.settingGroup}>
+            <div style={styles.settingLabel}>Port</div>
+            <input style={{ ...styles.input, opacity: 0.5, maxWidth: 100 }} placeholder="22" disabled />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function CollaborationSettings() {
+  return (
+    <>
+      <h2 style={styles.sectionTitle}>Collaboration</h2>
+      <div style={{
+        padding: '32px 24px',
+        textAlign: 'center',
+        color: 'var(--text-muted)',
+        fontSize: 13,
+      }}>
+        <svg width="48" height="48" viewBox="0 0 16 16" fill="var(--text-muted)" style={{ opacity: 0.3, marginBottom: 12 }}>
+          <path d="M12 6a3 3 0 100-6 3 3 0 000 6zm-8 0a3 3 0 100-6 3 3 0 000 6z" />
+        </svg>
+        <p style={{ fontWeight: 600, marginBottom: 8 }}>Coming Soon</p>
+        <p>Real-time collaboration with team members. Share editing sessions, review code together, and pair program — all within LocalCode.</p>
+      </div>
+    </>
+  );
+}
+
 export default function SettingsPanel() {
   const [activeSection, setActiveSection] = useState<SettingsSection>('general');
 
@@ -556,16 +569,6 @@ export default function SettingsPanel() {
               ...(activeSection === section.id ? styles.navItemActive : {}),
             }}
             onClick={() => setActiveSection(section.id)}
-            onMouseEnter={(e) => {
-              if (activeSection !== section.id) {
-                (e.currentTarget as HTMLElement).style.color = '#cccccc';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (activeSection !== section.id) {
-                (e.currentTarget as HTMLElement).style.color = '#969696';
-              }
-            }}
           >
             {section.icon}
             {section.label}
@@ -579,6 +582,9 @@ export default function SettingsPanel() {
         {activeSection === 'llm' && <LLMSettings />}
         {activeSection === 'agent' && <AgentSettings />}
         {activeSection === 'keybindings' && <KeybindingsSettings />}
+        {activeSection === 'mcp' && <MCPSettingsSection />}
+        {activeSection === 'remote' && <RemoteDevSettings />}
+        {activeSection === 'collaboration' && <CollaborationSettings />}
       </div>
     </div>
   );

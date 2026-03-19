@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 
 interface BlameAnnotation {
@@ -22,7 +22,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column' as const,
     height: '100%',
-    background: '#1e1e1e',
+    background: 'var(--bg-primary)',
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     overflow: 'auto',
   } as React.CSSProperties,
@@ -30,19 +30,19 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     padding: '8px 12px',
-    background: '#252526',
-    borderBottom: '1px solid #3c3c3c',
+    background: 'var(--bg-secondary)',
+    borderBottom: '1px solid var(--border-color)',
     fontSize: 12,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     gap: 8,
     flexShrink: 0,
   } as React.CSSProperties,
   headerTitle: {
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     fontWeight: 500,
   } as React.CSSProperties,
   headerPath: {
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap' as const,
@@ -60,7 +60,7 @@ const styles = {
     transition: 'background 0.05s',
   } as React.CSSProperties,
   lineHover: {
-    background: '#2a2d2e',
+    background: 'var(--bg-hover)',
   } as React.CSSProperties,
   blameGutter: {
     width: 280,
@@ -69,13 +69,13 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
-    borderRight: '1px solid #2d2d2d',
+    borderRight: '1px solid var(--bg-tertiary)',
     flexShrink: 0,
     overflow: 'hidden',
     cursor: 'pointer',
   } as React.CSSProperties,
   blameGutterSameCommit: {
-    color: '#3c3c3c',
+    color: 'var(--border-color)',
   } as React.CSSProperties,
   blameHash: {
     fontSize: 11,
@@ -86,7 +86,7 @@ const styles = {
   } as React.CSSProperties,
   blameAuthor: {
     fontSize: 11,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap' as const,
@@ -95,7 +95,7 @@ const styles = {
   } as React.CSSProperties,
   blameDate: {
     fontSize: 10,
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     flexShrink: 0,
     marginLeft: 'auto',
     whiteSpace: 'nowrap' as const,
@@ -107,7 +107,7 @@ const styles = {
     padding: '0 8px',
     fontSize: 12,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', 'Menlo', monospace",
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     userSelect: 'none' as const,
     flexShrink: 0,
   } as React.CSSProperties,
@@ -126,7 +126,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 40,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     fontSize: 13,
   } as React.CSSProperties,
   error: {
@@ -142,13 +142,13 @@ const styles = {
   tooltip: {
     position: 'absolute' as const,
     zIndex: 100,
-    background: '#252526',
-    border: '1px solid #3c3c3c',
+    background: 'var(--bg-secondary)',
+    border: '1px solid var(--border-color)',
     borderRadius: 4,
     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
     padding: '8px 12px',
     fontSize: 12,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     maxWidth: 400,
     lineHeight: 1.5,
   } as React.CSSProperties,
@@ -159,12 +159,12 @@ const styles = {
     marginBottom: 4,
   } as React.CSSProperties,
   tooltipMessage: {
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     marginBottom: 4,
     fontWeight: 500,
   } as React.CSSProperties,
   tooltipMeta: {
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     fontSize: 11,
   } as React.CSSProperties,
 };
@@ -177,21 +177,18 @@ interface BlameLineProps {
 }
 
 function BlameLine({ annotation, showGutter, onHover, hoveredHash }: BlameLineProps) {
-  const [hovered, setHovered] = useState(false);
   const isHighlighted = hoveredHash === annotation.hash;
 
   return (
     <div
       style={{
         ...styles.line,
-        background: isHighlighted ? '#2a2d2e' : 'transparent',
+        background: isHighlighted ? 'var(--bg-hover)' : 'transparent',
       }}
       onMouseEnter={() => {
-        setHovered(true);
         onHover(annotation.hash);
       }}
       onMouseLeave={() => {
-        setHovered(false);
         onHover(null);
       }}
     >
@@ -209,7 +206,7 @@ function BlameLine({ annotation, showGutter, onHover, hoveredHash }: BlameLinePr
             <span style={styles.blameDate}>{annotation.relativeDate}</span>
           </>
         ) : (
-          <span style={{ color: '#2d2d2d' }}>|</span>
+          <span style={{ color: 'var(--bg-tertiary)' }}>|</span>
         )}
       </div>
       <span style={styles.lineNumber}>{annotation.lineNumber}</span>
@@ -251,17 +248,13 @@ export default function BlameView({ filePath, projectPath }: BlameViewProps) {
     };
   }, [filePath, projectPath]);
 
-  const handleCopyHash = useCallback((hash: string) => {
-    navigator.clipboard.writeText(hash).catch(() => {});
-  }, []);
-
   const fileName = filePath.split('/').pop() || filePath;
 
   if (loading) {
     return (
       <div style={styles.container}>
         <div style={styles.header}>
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="#969696">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="var(--text-secondary)">
             <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 13A6 6 0 118 2a6 6 0 010 12z" />
           </svg>
           <span style={styles.headerTitle}>Git Blame</span>
@@ -297,7 +290,7 @@ export default function BlameView({ filePath, projectPath }: BlameViewProps) {
         </svg>
         <span style={styles.headerTitle}>Git Blame</span>
         <span style={styles.headerPath}>{fileName}</span>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#6a6a6a' }}>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>
           {annotations.length} lines
         </span>
       </div>

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { DiffEditor } from '@monaco-editor/react';
 import type { FileChange } from './Composer';
 
@@ -10,7 +10,7 @@ interface FileChangesProps {
 
 const styles = {
   fileItem: {
-    borderBottom: '1px solid #3c3c3c',
+    borderBottom: '1px solid var(--border-color)',
   } as React.CSSProperties,
   fileHeader: {
     display: 'flex',
@@ -20,15 +20,15 @@ const styles = {
     gap: 8,
     fontSize: 13,
     transition: 'background 0.1s',
-    background: '#252526',
+    background: 'var(--bg-secondary)',
   } as React.CSSProperties,
   fileHeaderHover: {
-    background: '#2a2d2e',
+    background: 'var(--bg-hover)',
   } as React.CSSProperties,
   chevron: {
     width: 14,
     height: 14,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     flexShrink: 0,
     transition: 'transform 0.15s',
   } as React.CSSProperties,
@@ -39,14 +39,14 @@ const styles = {
     flexShrink: 0,
   } as React.CSSProperties,
   fileName: {
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     fontWeight: 500,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap' as const,
   } as React.CSSProperties,
   filePath: {
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     fontSize: 11,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
@@ -90,24 +90,24 @@ const styles = {
   } as React.CSSProperties,
   diffArea: {
     height: 300,
-    borderTop: '1px solid #3c3c3c',
+    borderTop: '1px solid var(--border-color)',
   } as React.CSSProperties,
   statsRow: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
     padding: '4px 16px',
-    background: '#1e1e1e',
-    borderTop: '1px solid #3c3c3c',
+    background: 'var(--bg-primary)',
+    borderTop: '1px solid var(--border-color)',
     fontSize: 11,
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
   } as React.CSSProperties,
   emptyState: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 40,
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     fontSize: 13,
   } as React.CSSProperties,
 };
@@ -120,7 +120,7 @@ const EXT_COLORS: Record<string, string> = {
 
 function getFileColor(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase() || '';
-  return EXT_COLORS[ext] || '#cccccc';
+  return EXT_COLORS[ext] || 'var(--text-primary)';
 }
 
 function computeStats(original: string, proposed: string): { added: number; removed: number } {

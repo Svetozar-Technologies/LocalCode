@@ -45,7 +45,7 @@ const styles = {
   sectionTitle: {
     fontSize: 18,
     fontWeight: 600,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     marginBottom: 20,
     paddingBottom: 8,
     borderBottom: '1px solid #3c3c3c',
@@ -53,12 +53,12 @@ const styles = {
   subsectionTitle: {
     fontSize: 14,
     fontWeight: 600,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     marginBottom: 12,
     marginTop: 24,
   } as React.CSSProperties,
   providerCard: {
-    background: '#252526',
+    background: 'var(--bg-secondary)',
     border: '1px solid #3c3c3c',
     borderRadius: 6,
     marginBottom: 16,
@@ -76,12 +76,12 @@ const styles = {
     borderBottom: '1px solid transparent',
   } as React.CSSProperties,
   providerHeaderExpanded: {
-    borderBottomColor: '#3c3c3c',
+    borderBottomColor: 'var(--border-color)',
   } as React.CSSProperties,
   providerName: {
     fontSize: 14,
     fontWeight: 500,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     flex: 1,
   } as React.CSSProperties,
   providerType: {
@@ -124,15 +124,15 @@ const styles = {
   fieldLabel: {
     fontSize: 12,
     fontWeight: 500,
-    color: '#969696',
+    color: 'var(--text-secondary)',
   } as React.CSSProperties,
   input: {
     width: '100%',
     maxWidth: 450,
-    background: '#3c3c3c',
+    background: 'var(--border-color)',
     border: '1px solid #3c3c3c',
     borderRadius: 4,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     padding: '7px 10px',
     fontSize: 13,
     outline: 'none',
@@ -144,10 +144,10 @@ const styles = {
   } as React.CSSProperties,
   select: {
     maxWidth: 450,
-    background: '#3c3c3c',
+    background: 'var(--border-color)',
     border: '1px solid #3c3c3c',
     borderRadius: 4,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     padding: '7px 10px',
     fontSize: 13,
     outline: 'none',
@@ -162,7 +162,7 @@ const styles = {
     background: 'none',
     border: '1px solid #3c3c3c',
     borderRadius: 4,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     padding: '6px 16px',
     cursor: 'pointer',
     fontSize: 12,
@@ -199,7 +199,7 @@ const styles = {
     background: 'none',
     border: '1px dashed #3c3c3c',
     borderRadius: 6,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     fontSize: 13,
     width: '100%',
@@ -207,7 +207,7 @@ const styles = {
   } as React.CSSProperties,
   description: {
     fontSize: 12,
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     lineHeight: 1.5,
     marginBottom: 16,
   } as React.CSSProperties,
@@ -229,7 +229,7 @@ const styles = {
     marginBottom: 24,
   } as React.CSSProperties,
   modelCard: {
-    background: '#252526',
+    background: 'var(--bg-secondary)',
     border: '1px solid #3c3c3c',
     borderRadius: 6,
     padding: 14,
@@ -245,7 +245,7 @@ const styles = {
   modelCardName: {
     fontSize: 13,
     fontWeight: 600,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     flex: 1,
   } as React.CSSProperties,
   modelCardBadge: {
@@ -258,7 +258,7 @@ const styles = {
   } as React.CSSProperties,
   modelCardDesc: {
     fontSize: 11,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     lineHeight: 1.4,
   } as React.CSSProperties,
   modelCardMeta: {
@@ -268,8 +268,8 @@ const styles = {
   } as React.CSSProperties,
   modelCardMetaItem: {
     fontSize: 10,
-    color: '#6a6a6a',
-    background: '#1e1e1e',
+    color: 'var(--text-muted)',
+    background: 'var(--bg-primary)',
     padding: '2px 6px',
     borderRadius: 3,
     fontFamily: "'JetBrains Mono', monospace",
@@ -277,7 +277,7 @@ const styles = {
   progressBar: {
     width: '100%',
     height: 4,
-    background: '#3c3c3c',
+    background: 'var(--border-color)',
     borderRadius: 2,
     overflow: 'hidden' as const,
   } as React.CSSProperties,
@@ -289,7 +289,7 @@ const styles = {
   } as React.CSSProperties,
   progressText: {
     fontSize: 10,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     fontFamily: "'JetBrains Mono', monospace",
   } as React.CSSProperties,
 };
@@ -326,7 +326,7 @@ function getStatusColor(status: ConnectionStatus): string {
     case 'connected': return '#4ec9b0';
     case 'failed': return '#f44747';
     case 'testing': return '#dcdcaa';
-    default: return '#6a6a6a';
+    default: return 'var(--text-muted)';
   }
 }
 
@@ -369,8 +369,17 @@ function ModelLibrary() {
     try {
       const result = await invoke<CatalogEntry[]>('list_model_catalog');
       setCatalog(result);
+      // Cache catalog to localStorage for offline fallback
+      localStorage.setItem('localcode-model-catalog', JSON.stringify(result));
     } catch (e) {
       console.error('Failed to load catalog:', e);
+      // Fall back to cached catalog when offline
+      try {
+        const cached = localStorage.getItem('localcode-model-catalog');
+        if (cached) {
+          setCatalog(JSON.parse(cached));
+        }
+      } catch { /* ignore parse errors */ }
     }
   }, []);
 
@@ -601,7 +610,7 @@ function ModelLibrary() {
                   </>
                 )}
                 {isDownloading && (
-                  <span style={{ fontSize: 11, color: '#969696', alignSelf: 'center' }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-secondary)', alignSelf: 'center' }}>
                     Downloading...
                   </span>
                 )}
@@ -723,7 +732,7 @@ function ProviderCard({
         <div
           style={{
             ...styles.enableToggle,
-            background: provider.enabled ? '#007acc' : '#3c3c3c',
+            background: provider.enabled ? '#007acc' : 'var(--border-color)',
           }}
           onClick={(e) => {
             e.stopPropagation();
@@ -752,7 +761,7 @@ function ProviderCard({
               onChange={(e) => onUpdate({ name: e.target.value })}
               placeholder="Provider name"
               onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = '#007acc'; }}
-              onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = '#3c3c3c'; }}
+              onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = 'var(--border-color)'; }}
             />
           </div>
 
@@ -766,7 +775,7 @@ function ProviderCard({
                 onChange={(e) => onUpdate({ apiKey: e.target.value })}
                 placeholder="sk-..."
                 onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = '#007acc'; }}
-                onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = '#3c3c3c'; }}
+                onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = 'var(--border-color)'; }}
               />
             </div>
           )}
@@ -781,7 +790,7 @@ function ProviderCard({
                 onChange={(e) => onUpdate({ baseUrl: e.target.value })}
                 placeholder="https://api.example.com/v1"
                 onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = '#007acc'; }}
-                onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = '#3c3c3c'; }}
+                onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = 'var(--border-color)'; }}
               />
             </div>
           )}
@@ -798,13 +807,13 @@ function ProviderCard({
                   placeholder="Path to .gguf model file"
                   readOnly
                   onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = '#007acc'; }}
-                  onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = '#3c3c3c'; }}
+                  onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = 'var(--border-color)'; }}
                 />
                 <button
                   style={styles.testButton}
                   onClick={handleSelectModel}
-                  onMouseEnter={(e) => { (e.target as HTMLElement).style.borderColor = '#969696'; }}
-                  onMouseLeave={(e) => { (e.target as HTMLElement).style.borderColor = '#3c3c3c'; }}
+                  onMouseEnter={(e) => { (e.target as HTMLElement).style.borderColor = 'var(--text-secondary)'; }}
+                  onMouseLeave={(e) => { (e.target as HTMLElement).style.borderColor = 'var(--border-color)'; }}
                 >
                   Browse
                 </button>
@@ -817,7 +826,7 @@ function ProviderCard({
                 onChange={(e) => onUpdate({ model: e.target.value })}
                 placeholder="model-name"
                 onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = '#007acc'; }}
-                onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = '#3c3c3c'; }}
+                onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = 'var(--border-color)'; }}
               />
             ) : (
               <select
@@ -837,8 +846,8 @@ function ProviderCard({
               style={styles.testButton}
               onClick={(e) => { e.stopPropagation(); handleTestConnection(); }}
               disabled={connectionStatus === 'testing'}
-              onMouseEnter={(e) => { (e.target as HTMLElement).style.borderColor = '#969696'; }}
-              onMouseLeave={(e) => { (e.target as HTMLElement).style.borderColor = '#3c3c3c'; }}
+              onMouseEnter={(e) => { (e.target as HTMLElement).style.borderColor = 'var(--text-secondary)'; }}
+              onMouseLeave={(e) => { (e.target as HTMLElement).style.borderColor = 'var(--border-color)'; }}
             >
               {connectionStatus === 'testing' ? (
                 <>
@@ -961,8 +970,8 @@ export default function LLMSettings() {
         <button
           style={styles.addButton}
           onClick={() => setShowAddMenu(!showAddMenu)}
-          onMouseEnter={(e) => { (e.target as HTMLElement).style.borderColor = '#969696'; }}
-          onMouseLeave={(e) => { (e.target as HTMLElement).style.borderColor = '#3c3c3c'; }}
+          onMouseEnter={(e) => { (e.target as HTMLElement).style.borderColor = 'var(--text-secondary)'; }}
+          onMouseLeave={(e) => { (e.target as HTMLElement).style.borderColor = 'var(--border-color)'; }}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M14 7v1H8v6H7V8H1V7h6V1h1v6h6z" />
@@ -978,7 +987,7 @@ export default function LLMSettings() {
               left: '50%',
               transform: 'translateX(-50%)',
               marginTop: 4,
-              background: '#252526',
+              background: 'var(--bg-secondary)',
               border: '1px solid #3c3c3c',
               borderRadius: 4,
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
@@ -1002,11 +1011,11 @@ export default function LLMSettings() {
                   padding: '8px 12px',
                   cursor: 'pointer',
                   fontSize: 13,
-                  color: '#cccccc',
+                  color: 'var(--text-primary)',
                 }}
                 onClick={() => handleAddProvider(item.type)}
                 onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.background = '#2a2d2e';
+                  (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
                 }}
                 onMouseLeave={(e) => {
                   (e.currentTarget as HTMLElement).style.background = 'transparent';

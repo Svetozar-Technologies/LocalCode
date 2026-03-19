@@ -9,7 +9,7 @@ interface CommitViewProps {
 const styles = {
   container: {
     padding: '10px 12px',
-    borderBottom: '1px solid #3c3c3c',
+    borderBottom: '1px solid var(--border-color)',
     display: 'flex',
     flexDirection: 'column' as const,
     gap: 8,
@@ -17,10 +17,10 @@ const styles = {
   } as React.CSSProperties,
   input: {
     width: '100%',
-    background: '#3c3c3c',
-    border: '1px solid #3c3c3c',
+    background: 'var(--border-color)',
+    border: '1px solid var(--border-color)',
     borderRadius: 4,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     padding: '8px 10px',
     fontSize: 12,
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -59,9 +59,9 @@ const styles = {
   } as React.CSSProperties,
   secondaryButton: {
     background: 'none',
-    border: '1px solid #3c3c3c',
+    border: '1px solid var(--border-color)',
     borderRadius: 4,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     padding: '6px 12px',
     cursor: 'pointer',
     fontSize: 12,
@@ -78,8 +78,8 @@ const styles = {
     top: '100%',
     right: 0,
     marginTop: 4,
-    background: '#252526',
-    border: '1px solid #3c3c3c',
+    background: 'var(--bg-secondary)',
+    border: '1px solid var(--border-color)',
     borderRadius: 4,
     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
     zIndex: 10,
@@ -93,11 +93,11 @@ const styles = {
     padding: '8px 12px',
     cursor: 'pointer',
     fontSize: 12,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     transition: 'background 0.05s',
   } as React.CSSProperties,
   dropdownItemHover: {
-    background: '#2a2d2e',
+    background: 'var(--bg-hover)',
   } as React.CSSProperties,
   errorText: {
     color: '#f44747',
@@ -111,16 +111,17 @@ const styles = {
   } as React.CSSProperties,
   charCount: {
     fontSize: 10,
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     textAlign: 'right' as const,
   } as React.CSSProperties,
 };
 
 export default function CommitView({ onRefresh }: CommitViewProps) {
-  const { projectPath, gitStatus } = useAppStore();
+  const { projectPath, gitStatus, selectedProvider } = useAppStore();
   const [message, setMessage] = useState('');
   const [inputFocused, setInputFocused] = useState(false);
   const [committing, setCommitting] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -207,6 +208,48 @@ export default function CommitView({ onRefresh }: CommitViewProps) {
     setCommitting(false);
   }, [projectPath, message, onRefresh]);
 
+  // Feature 6: Generate commit message with AI
+  const handleGenerate = useCallback(async () => {
+    if (!projectPath || generating) return;
+    setGenerating(true);
+    setError('');
+    try {
+      const diff = await invoke<string>('git_diff', { path: projectPath });
+      if (!diff || diff.trim().length === 0) {
+        setError('No diff available to generate commit message.');
+        setGenerating(false);
+        return;
+      }
+      const genId = `gen-${Date.now()}`;
+      const providerName = selectedProvider !== 'local' ? selectedProvider : undefined;
+      // Use a one-shot chat call and collect the result
+      let result = '';
+      const { listen: listenEvent } = await import('@tauri-apps/api/event');
+      const unlisten = await listenEvent<{ id: string; chunk: string }>('llm-chat-chunk', (event) => {
+        if (event.payload.id === genId) {
+          result += event.payload.chunk;
+        }
+      });
+      const unlistenDone = await listenEvent<{ id: string }>('llm-chat-done', (event) => {
+        if (event.payload.id === genId) {
+          setMessage(result.trim());
+          setGenerating(false);
+          unlisten();
+          unlistenDone();
+        }
+      });
+      await invoke('llm_chat', {
+        responseId: genId,
+        messages: [{ role: 'user', content: `Generate a concise git commit message (subject line + optional body) for this diff. Only output the commit message, nothing else:\n\n${diff.slice(0, 6000)}` }],
+        context: '',
+        providerName,
+      });
+    } catch (err) {
+      setError(`Generate failed: ${err}`);
+      setGenerating(false);
+    }
+  }, [projectPath, generating, selectedProvider]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
@@ -236,11 +279,34 @@ export default function CommitView({ onRefresh }: CommitViewProps) {
       {message.length > 0 && (
         <div style={{
           ...styles.charCount,
-          color: subjectTooLong ? '#f44747' : '#6a6a6a',
+          color: subjectTooLong ? '#f44747' : 'var(--text-muted)',
         }}>
           {subjectLength}/72 characters {subjectTooLong ? '(too long)' : ''}
         </div>
       )}
+
+      <button
+        onClick={handleGenerate}
+        disabled={generating || !hasChanges}
+        style={{
+          background: 'none',
+          border: '1px solid var(--accent-purple)',
+          borderRadius: 4,
+          color: 'var(--accent-purple)',
+          padding: '4px 10px',
+          cursor: generating || !hasChanges ? 'default' : 'pointer',
+          fontSize: 11,
+          opacity: generating || !hasChanges ? 0.5 : 1,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+        }}
+      >
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93z" />
+        </svg>
+        {generating ? 'Generating...' : 'AI Generate'}
+      </button>
 
       {error && <div style={styles.errorText}>{error}</div>}
       {success && <div style={styles.successText}>{success}</div>}
@@ -271,8 +337,8 @@ export default function CommitView({ onRefresh }: CommitViewProps) {
             style={styles.secondaryButton}
             onClick={() => setShowDropdown(!showDropdown)}
             title="More commit options"
-            onMouseEnter={(e) => { (e.target as HTMLElement).style.borderColor = '#969696'; }}
-            onMouseLeave={(e) => { (e.target as HTMLElement).style.borderColor = '#3c3c3c'; }}
+            onMouseEnter={(e) => { (e.target as HTMLElement).style.borderColor = 'var(--text-secondary)'; }}
+            onMouseLeave={(e) => { (e.target as HTMLElement).style.borderColor = 'var(--border-color)'; }}
           >
             <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
               <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="1.5" fill="none" />

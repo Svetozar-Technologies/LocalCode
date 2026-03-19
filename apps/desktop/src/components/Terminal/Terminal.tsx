@@ -8,18 +8,6 @@ import { useAppStore } from '../../stores/appStore';
 import type { DiagnosticProblem, OutputEntry } from '../../types';
 import '@xterm/xterm/css/xterm.css';
 
-// Error patterns for parsing terminal output
-const ERROR_PATTERNS = [
-  // TypeScript / ESLint: src/file.ts(10,5): error TS2304: ...
-  /^(.+?)\((\d+),(\d+)\):\s*(error|warning)\s+(TS\d+):\s*(.+)$/,
-  // Rust: error[E0308]: mismatched types --> src/main.rs:10:5
-  /^\s*(?:error|warning)(?:\[([A-Z]\d+)\])?: (.+?)(?:\s*-->\s*(.+?):(\d+):(\d+))?$/,
-  // ESLint: /path/file.js:10:5: error message (rule-name)
-  /^(.+?):(\d+):(\d+):\s*(error|warning)\s+(.+?)(?:\s+\((.+?)\))?$/,
-  // Generic: file:line:col: severity: message
-  /^(.+?):(\d+):(\d+):\s*(error|warning|info):\s*(.+)$/,
-];
-
 function parseTerminalLine(line: string): DiagnosticProblem | null {
   // TypeScript pattern
   const tsMatch = line.match(/^(.+?)\((\d+),(\d+)\):\s*(error|warning)\s+(TS\d+):\s*(.+)$/);
@@ -171,11 +159,11 @@ export default function TerminalPanel() {
 
     const xterm = new XTerm({
       theme: {
-        background: '#1e1e1e',
-        foreground: '#cccccc',
+        background: 'var(--bg-primary)',
+        foreground: 'var(--text-primary)',
         cursor: '#aeafad',
         selectionBackground: '#264f78',
-        black: '#1e1e1e',
+        black: 'var(--bg-primary)',
         red: '#f44747',
         green: '#4ec9b0',
         yellow: '#dcdcaa',

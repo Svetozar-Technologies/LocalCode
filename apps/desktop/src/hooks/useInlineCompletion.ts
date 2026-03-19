@@ -4,8 +4,40 @@ import { useAppStore } from '../stores/appStore';
 import type { editor } from 'monaco-editor';
 
 let completionDisposable: any = null;
+let cursorDisposable: any = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let abortController: AbortController | null = null;
+
+// LRU cache: 10 entries, 60s TTL
+const CACHE_MAX = 10;
+const CACHE_TTL = 60_000;
+interface CacheEntry {
+  completion: string;
+  timestamp: number;
+}
+const completionCache = new Map<string, CacheEntry>();
+
+function cacheGet(prefix: string): string | null {
+  const entry = completionCache.get(prefix);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL) {
+    completionCache.delete(prefix);
+    return null;
+  }
+  // Move to end (most recently used)
+  completionCache.delete(prefix);
+  completionCache.set(prefix, entry);
+  return entry.completion;
+}
+
+function cacheSet(prefix: string, completion: string) {
+  // Evict oldest if at capacity
+  if (completionCache.size >= CACHE_MAX) {
+    const oldest = completionCache.keys().next().value;
+    if (oldest !== undefined) completionCache.delete(oldest);
+  }
+  completionCache.set(prefix, { completion, timestamp: Date.now() });
+}
 
 export function useInlineCompletion(editorInstance: editor.IStandaloneCodeEditor | null) {
 
@@ -20,6 +52,22 @@ export function useInlineCompletion(editorInstance: editor.IStandaloneCodeEditor
       completionDisposable.dispose();
       completionDisposable = null;
     }
+    if (cursorDisposable) {
+      cursorDisposable.dispose();
+      cursorDisposable = null;
+    }
+
+    // Cancel on cursor movement
+    cursorDisposable = editorInstance.onDidChangeCursorPosition(() => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      if (abortController) {
+        abortController.abort();
+        abortController = null;
+      }
+    });
 
     // Register inline completion provider
     completionDisposable = monaco.languages.registerInlineCompletionsProvider('*', {
@@ -43,7 +91,33 @@ export function useInlineCompletion(editorInstance: editor.IStandaloneCodeEditor
         // Check cancellation token
         if (token.isCancellationRequested) return { items: [] };
 
-        // Debounce 300ms
+        // Get text before cursor for cache key
+        const textBeforeCursor = model.getValueInRange({
+          startLineNumber: Math.max(1, position.lineNumber - 50),
+          startColumn: 1,
+          endLineNumber: position.lineNumber,
+          endColumn: position.column,
+        });
+
+        // Check cache first
+        const cached = cacheGet(textBeforeCursor);
+        if (cached) {
+          return {
+            items: [
+              {
+                insertText: cached,
+                range: {
+                  startLineNumber: position.lineNumber,
+                  startColumn: position.column,
+                  endLineNumber: position.lineNumber,
+                  endColumn: position.column,
+                },
+              },
+            ],
+          };
+        }
+
+        // Debounce 200ms
         const result = await new Promise<{ items: any[] }>((resolve) => {
           debounceTimer = setTimeout(async () => {
             if (token.isCancellationRequested) {
@@ -57,14 +131,6 @@ export function useInlineCompletion(editorInstance: editor.IStandaloneCodeEditor
             // Get file language for better context
             const uri = model.uri.toString();
             const lang = model.getLanguageId?.() || 'plaintext';
-
-            // Get text before and after cursor
-            const textBeforeCursor = model.getValueInRange({
-              startLineNumber: Math.max(1, position.lineNumber - 50),
-              startColumn: 1,
-              endLineNumber: position.lineNumber,
-              endColumn: position.column,
-            });
 
             const textAfterCursor = model.getValueInRange({
               startLineNumber: position.lineNumber,
@@ -91,6 +157,9 @@ export function useInlineCompletion(editorInstance: editor.IStandaloneCodeEditor
                 return;
               }
 
+              // Cache successful completion
+              cacheSet(textBeforeCursor, completion);
+
               resolve({
                 items: [
                   {
@@ -108,7 +177,7 @@ export function useInlineCompletion(editorInstance: editor.IStandaloneCodeEditor
               useAppStore.getState().setCompletionStatus('idle');
               resolve({ items: [] });
             }
-          }, 300);
+          }, 200);
         });
 
         return result;
@@ -120,6 +189,10 @@ export function useInlineCompletion(editorInstance: editor.IStandaloneCodeEditor
       if (completionDisposable) {
         completionDisposable.dispose();
         completionDisposable = null;
+      }
+      if (cursorDisposable) {
+        cursorDisposable.dispose();
+        cursorDisposable = null;
       }
       if (debounceTimer) {
         clearTimeout(debounceTimer);

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 export interface MentionOption {
   id: string;
@@ -20,8 +20,8 @@ const styles = {
   container: {
     position: 'absolute' as const,
     zIndex: 200,
-    background: '#252526',
-    border: '1px solid #3c3c3c',
+    background: 'var(--bg-secondary)',
+    border: '1px solid var(--border-color)',
     borderRadius: 6,
     boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
     width: 280,
@@ -35,8 +35,8 @@ const styles = {
     fontWeight: 600,
     textTransform: 'uppercase' as const,
     letterSpacing: 0.5,
-    color: '#6a6a6a',
-    borderBottom: '1px solid #3c3c3c',
+    color: 'var(--text-muted)',
+    borderBottom: '1px solid var(--border-color)',
   } as React.CSSProperties,
   option: {
     display: 'flex',
@@ -67,12 +67,12 @@ const styles = {
   } as React.CSSProperties,
   optionLabel: {
     fontSize: 13,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     fontWeight: 500,
   } as React.CSSProperties,
   optionDesc: {
     fontSize: 11,
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap' as const,
@@ -80,14 +80,14 @@ const styles = {
   optionPrefix: {
     marginLeft: 'auto',
     fontSize: 11,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', 'Menlo', monospace",
     flexShrink: 0,
   } as React.CSSProperties,
   empty: {
     padding: 16,
     textAlign: 'center' as const,
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     fontSize: 12,
   } as React.CSSProperties,
 };
@@ -169,7 +169,7 @@ function getIconBg(id: string): string {
     case 'docs': return '#dcdcaa22';
     case 'terminal': return '#c586c022';
     case 'selection': return '#b5cea822';
-    default: return '#3c3c3c';
+    default: return 'var(--border-color)';
   }
 }
 

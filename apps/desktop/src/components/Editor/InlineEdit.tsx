@@ -15,14 +15,14 @@ interface InlineEditState {
   proposedCode: string;
   status: 'idle' | 'loading' | 'preview' | 'error';
   error: string;
-  selectionRange: editor.IRange | null;
+  selectionRange: any | null;
 }
 
 const styles = {
   overlay: {
     position: 'absolute' as const,
     zIndex: 100,
-    background: '#252526',
+    background: 'var(--bg-secondary)',
     border: '1px solid #007acc',
     borderRadius: 6,
     boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
@@ -34,11 +34,11 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     padding: '8px 12px',
-    background: '#1e1e1e',
-    borderBottom: '1px solid #3c3c3c',
+    background: 'var(--bg-primary)',
+    borderBottom: '1px solid var(--border-color)',
     fontSize: 12,
     fontWeight: 600,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     gap: 8,
   } as React.CSSProperties,
   badge: {
@@ -54,10 +54,10 @@ const styles = {
   } as React.CSSProperties,
   input: {
     width: '100%',
-    background: '#3c3c3c',
-    border: '1px solid #3c3c3c',
+    background: 'var(--border-color)',
+    border: '1px solid var(--border-color)',
     borderRadius: 4,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     padding: '8px 10px',
     fontSize: 13,
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -71,15 +71,15 @@ const styles = {
   },
   hint: {
     fontSize: 11,
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     marginTop: 6,
     display: 'flex',
     alignItems: 'center',
     gap: 4,
   } as React.CSSProperties,
   kbd: {
-    background: '#2d2d2d',
-    border: '1px solid #3c3c3c',
+    background: 'var(--bg-tertiary)',
+    border: '1px solid var(--border-color)',
     borderRadius: 3,
     padding: '1px 5px',
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', 'Menlo', monospace",
@@ -89,8 +89,8 @@ const styles = {
     padding: '0 10px 10px',
   } as React.CSSProperties,
   diffContainer: {
-    background: '#1e1e1e',
-    border: '1px solid #3c3c3c',
+    background: 'var(--bg-primary)',
+    border: '1px solid var(--border-color)',
     borderRadius: 4,
     overflow: 'auto',
     maxHeight: 200,
@@ -111,21 +111,21 @@ const styles = {
     color: '#4ec9b0',
   } as React.CSSProperties,
   diffContext: {
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
   } as React.CSSProperties,
   actions: {
     display: 'flex',
     justifyContent: 'flex-end',
     gap: 6,
     padding: '8px 10px',
-    borderTop: '1px solid #3c3c3c',
-    background: '#1e1e1e',
+    borderTop: '1px solid var(--border-color)',
+    background: 'var(--bg-primary)',
   } as React.CSSProperties,
   acceptButton: {
     background: '#4ec9b0',
     border: 'none',
     borderRadius: 4,
-    color: '#1e1e1e',
+    color: 'var(--bg-primary)',
     padding: '5px 14px',
     cursor: 'pointer',
     fontSize: 12,
@@ -133,9 +133,9 @@ const styles = {
   } as React.CSSProperties,
   rejectButton: {
     background: 'none',
-    border: '1px solid #3c3c3c',
+    border: '1px solid var(--border-color)',
     borderRadius: 4,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     padding: '5px 14px',
     cursor: 'pointer',
     fontSize: 12,
@@ -227,7 +227,7 @@ export default function InlineEdit({ editorInstance }: InlineEditProps) {
     const monaco = (window as any).monaco;
     if (!monaco) return;
 
-    const disposable = editorInstance.addCommand(
+    editorInstance.addCommand(
       monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK,
       () => {
         const selection = editorInstance.getSelection();
@@ -409,7 +409,7 @@ export default function InlineEdit({ editorInstance }: InlineEditProps) {
         <span>Inline Edit</span>
         <span style={styles.badge}>AI</span>
         <span
-          style={{ marginLeft: 'auto', cursor: 'pointer', color: '#6a6a6a', fontSize: 14 }}
+          style={{ marginLeft: 'auto', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 14 }}
           onClick={handleReject}
         >
           <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
@@ -470,7 +470,7 @@ export default function InlineEdit({ editorInstance }: InlineEditProps) {
 
       {(state.status === 'preview' || (state.status === 'loading' && state.proposedCode)) && diffLines.length > 0 && (
         <div style={styles.previewArea}>
-          <div style={{ fontSize: 11, color: '#969696', marginBottom: 4, fontWeight: 600 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4, fontWeight: 600 }}>
             Preview
           </div>
           <div style={styles.diffContainer}>
@@ -484,7 +484,7 @@ export default function InlineEdit({ editorInstance }: InlineEditProps) {
                   ...(line.type === 'context' ? styles.diffContext : {}),
                 }}
               >
-                <span style={{ display: 'inline-block', width: 14, color: '#6a6a6a' }}>
+                <span style={{ display: 'inline-block', width: 14, color: 'var(--text-muted)' }}>
                   {line.type === 'removed' ? '-' : line.type === 'added' ? '+' : ' '}
                 </span>
                 {line.text}
@@ -499,8 +499,8 @@ export default function InlineEdit({ editorInstance }: InlineEditProps) {
           <button
             style={styles.rejectButton}
             onClick={handleReject}
-            onMouseEnter={(e) => { (e.target as HTMLElement).style.borderColor = '#969696'; }}
-            onMouseLeave={(e) => { (e.target as HTMLElement).style.borderColor = '#3c3c3c'; }}
+            onMouseEnter={(e) => { (e.target as HTMLElement).style.borderColor = 'var(--text-secondary)'; }}
+            onMouseLeave={(e) => { (e.target as HTMLElement).style.borderColor = 'var(--border-color)'; }}
           >
             Reject
           </button>

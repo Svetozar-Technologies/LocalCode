@@ -27,6 +27,8 @@ grep-regex = "0.1"
 grep-searcher = "0.1"
 tokio-stream = "0.1"
 pin-project-lite = "0.2"
+notify = { workspace = true }
+urlencoding = "2"
 
 [dev-dependencies]
 tempfile = "3"

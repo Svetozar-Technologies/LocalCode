@@ -115,66 +115,20 @@ impl AgentEngine {
         };
 
         format!(
-            r#"# Identity & Role
-You are LocalCode Agent — an expert software engineer embedded in a code editor.
-You have direct access to the user's project files and can read, write, search, and execute commands.
+            r#"You are LocalCode Agent, an AI coding assistant with direct file system access.
 
-# Thinking Framework
-Before taking action on any task:
-1. UNDERSTAND — Read the request carefully. Identify what files/systems are involved.
-2. INVESTIGATE — Use codebase_search, search_content, list_dir, and read_file to understand current state.
-3. PLAN — Decide which files to modify and in what order. State your plan briefly.
-4. EXECUTE — Make changes using write_file/edit_file. Prefer edit_file for surgical changes to existing files.
-5. VERIFY — After changes, use run_command to run tests/build if applicable.
+# Rules
+- Use tools to complete tasks. Prefer edit_file for existing files, write_file for new files.
+- File paths must be relative to project root (e.g. 'src/main.rs').
+- If a command fails, read the error, fix the issue, and retry.
+- When done, summarize what was changed.
 
-# Tool Usage Strategy
-- START with codebase_search or search_content to find relevant code before reading files
-- Use read_file to understand context before using edit_file
-- Prefer edit_file over write_file for existing files (preserves what you haven't changed)
-- Use run_command for: build, test, lint, install, git operations
-- Use grep_search/find_files for targeted searches across the codebase
-- Use http_request for fetching external data or API calls
-- NEVER use run_command for file operations — use the dedicated file tools
-- Use dispatch_subagent for large tasks: dispatch a "searcher" to find relevant files, a "coder" for independent file changes, or a "reviewer" after making changes
-
-# Code Quality Rules
-- Match existing code style (indentation, naming, patterns)
-- Add imports at the top of files
-- Don't leave TODO/FIXME comments — implement the solution
-- Handle errors properly — don't unwrap() in production Rust, don't ignore promise rejections in JS
-- Write tests when creating new functions (if test infrastructure exists)
-
-# Path Rules
-- All file paths MUST be relative to the project root (e.g. 'src/main.rs', NOT '/src/main.rs')
-- Use '.' to refer to the project root directory
-- NEVER use absolute paths starting with / or ~
-
-# Communication
-- Be concise. Lead with action, not explanation
-- When you encounter an error, explain what went wrong and how you're fixing it
-- After completing work, summarize: files changed, what was done, how to verify
-
-# Error Recovery (CRITICAL)
-- If run_command returns [ERROR], you MUST:
-  1. Read the full error message carefully
-  2. Use read_file to check the file that caused the error
-  3. Use edit_file to fix the specific bug
-  4. Run the command again
-- NEVER ignore errors. NEVER move on without fixing.
-- If you wrote a Python file and it crashes with NameError/ImportError/SyntaxError, the file is incomplete. Fix it immediately.
-- If a file doesn't exist where expected, search for it
-- If a build/test fails, read the error output and fix the issue
-- After 2 failed attempts at the same approach, try a completely different approach
-- Don't repeat the same failing action — try a different approach
-
-# Context
 {memory_context}
 
-# Available Tools
+# Tools
 {tools_list}
 
-# Project Directory
-{project_path}"#,
+# Project: {project_path}"#,
             memory_context = memory_context,
             tools_list = tools_desc.join("\n"),
             project_path = ctx.project_path,
@@ -261,7 +215,7 @@ Before taking action on any task:
         for _iteration in 0..self.max_iterations {
             let opts = ChatOptions {
                 temperature: 0.3,
-                max_tokens: 4096,
+                max_tokens: 2048,
                 tools: tool_defs.clone(),
                 stream: false,
                 system: Some(system.clone()),
@@ -406,46 +360,26 @@ Before taking action on any task:
             .collect();
 
         let system = format!(
-            r#"You are LocalCode Agent, an AI coding assistant that MUST use tools to complete tasks.
-You CANNOT answer questions directly — you MUST use the tools below to take action.
-You have full access to the user's filesystem and can run any command.
+            r#"You are an AI agent that completes tasks by calling tools. You MUST ONLY respond with a tool call using the XML format below. NEVER explain what you will do. NEVER write plain text. Just call the tool.
 
-IMPORTANT: You MUST respond with a tool call in EVERY response. Never respond with plain text unless you are done with the task.
+FORMAT (use this EXACTLY):
+<tool>TOOL_NAME</tool>
+<args>JSON_ARGS</args>
 
-## How to call a tool
-Respond with EXACTLY this XML format (nothing else):
-<tool>tool_name</tool>
-<args>{{"param": "value"}}</args>
+EXAMPLE - User says "create hello.py with hello world":
+<tool>write_file</tool>
+<args>{{"path": "hello.py", "content": "print('Hello World')"}}</args>
 
-## Example
-User: "list files in src/"
-Your response:
+EXAMPLE - User says "list files":
 <tool>list_dir</tool>
-<args>{{"path": "src"}}</args>
+<args>{{"path": "."}}</args>
 
-User: "read screenshot on Desktop"
-Your response:
-<tool>list_dir</tool>
-<args>{{"path": "Desktop"}}</args>
-
-User: "run the tests"
-Your response:
-<tool>run_command</tool>
-<args>{{"command": "cargo test"}}</args>
-
-## Available Tools
+TOOLS:
 {tools}
 
-## Project Directory: {project}
+PROJECT: {project}
 
-## Rules
-- ALWAYS start by using a tool. Never just explain what you would do.
-- Use run_command to execute shell commands (python, pip, npm, cargo, etc.)
-- Use list_dir and read_file to explore files before modifying them.
-- Use write_file to create scripts and run_command to execute them.
-- If a task requires generating code to solve a problem (e.g. OCR, image processing, data parsing), write the code to a temp file with write_file, then run it with run_command. If one approach fails, try a different library or method.
-- Only call ONE tool at a time. Wait for the result before calling the next.
-- When you are completely done, respond with a plain text summary (no tool call)."#,
+RESPOND WITH A TOOL CALL NOW. NO TEXT. NO EXPLANATION."#,
             tools = tools_desc.join("\n"),
             project = ctx.project_path
         );
@@ -456,6 +390,9 @@ Your response:
             tool_calls: None,
             tool_call_id: None,
         }];
+
+        let mut last_tool: Option<String> = None;
+        let mut repeat_count = 0usize;
 
         for _iteration in 0..self.max_iterations {
             let opts = ChatOptions {
@@ -471,6 +408,21 @@ Your response:
             if let Some((tool_name, args_str)) = parse_xml_tool_call(&response.content) {
                 let args: serde_json::Value =
                     serde_json::from_str(&args_str).unwrap_or_default();
+
+                // Detect repeated tool calls (same tool + same args = stuck in loop)
+                let call_key = format!("{}:{}", tool_name, args_str);
+                if last_tool.as_deref() == Some(&call_key) {
+                    repeat_count += 1;
+                    if repeat_count >= 3 {
+                        let msg = "Task completed.".to_string();
+                        on_event(AgentEvent::Done(msg.clone()));
+                        self.finalize_session(task, &msg);
+                        return Ok(msg);
+                    }
+                } else {
+                    repeat_count = 0;
+                    last_tool = Some(call_key);
+                }
 
                 on_event(AgentEvent::Step(AgentStep {
                     step_type: "tool_call".to_string(),
@@ -522,9 +474,10 @@ Your response:
                     self.error_count.remove(&tool_name);
                 }
 
+                let tool_name_clone = tool_name.clone();
                 on_event(AgentEvent::Step(AgentStep {
                     step_type: "tool_result".to_string(),
-                    tool: Some(tool_name),
+                    tool: Some(tool_name_clone),
                     args: None,
                     result: Some(result.clone()),
                     content: None,
@@ -533,9 +486,11 @@ Your response:
 
                 // Format error results prominently for XML mode
                 let result_label = if is_error {
-                    "Tool result (ERROR — you must fix this)"
+                    "Tool result (ERROR — you MUST fix this before moving on. If a module is missing, install it with pip/npm. If a file has a bug, use edit_file to fix it. Then retry.)"
+                } else if tool_name == "run_command" {
+                    "Tool result (SUCCESS — if the original task is fully complete, respond with a plain text summary. Otherwise continue with the next step.)"
                 } else {
-                    "Tool result"
+                    "Tool result (OK)"
                 };
 
                 conversation.push(ChatMessage {
@@ -544,12 +499,36 @@ Your response:
                     tool_calls: None,
                     tool_call_id: None,
                 });
+                // Truncate long results to prevent context overflow
+                let truncated_result: String = if result.len() > 2000 {
+                    let cut: String = result.chars().take(1800).collect();
+                    format!("{}...\n[truncated, {} chars total]", cut, result.len())
+                } else {
+                    result.clone()
+                };
+
                 conversation.push(ChatMessage {
                     role: "user".to_string(),
-                    content: format!("{}:\n{}", result_label, result),
+                    content: format!("{}:\n{}", result_label, truncated_result),
                     tool_calls: None,
                     tool_call_id: None,
                 });
+
+                // Keep conversation short to stay within context limits
+                // Retain: first message (original task) + last 4 messages (2 exchanges)
+                if conversation.len() > 7 {
+                    let first = conversation[0].clone();
+                    let tail: Vec<ChatMessage> = conversation[conversation.len()-4..].to_vec();
+                    conversation.clear();
+                    conversation.push(first);
+                    conversation.push(ChatMessage {
+                        role: "user".to_string(),
+                        content: "[Previous tool calls omitted for brevity. Continue working on the task.]".to_string(),
+                        tool_calls: None,
+                        tool_call_id: None,
+                    });
+                    conversation.extend(tail);
+                }
             } else {
                 on_event(AgentEvent::Done(response.content.clone()));
                 self.finalize_session(task, &response.content);
@@ -669,15 +648,52 @@ fn parse_tool_calls_from_content(content: &str, registry: &ToolRegistry) -> Vec<
 }
 
 fn parse_xml_tool_call(text: &str) -> Option<(String, String)> {
-    let tool_start = text.find("<tool>")?;
-    let tool_end = text.find("</tool>")?;
-    let tool_name = text[tool_start + 6..tool_end].trim().to_string();
+    // Try standard XML format first
+    if let (Some(tool_start), Some(tool_end)) = (text.find("<tool>"), text.find("</tool>")) {
+        let tool_name = text[tool_start + 6..tool_end].trim().to_string();
+        if let (Some(args_start), Some(args_end)) = (text.find("<args>"), text.find("</args>")) {
+            let args_str = text[args_start + 6..args_end].trim().to_string();
+            return Some((tool_name, args_str));
+        }
+    }
 
-    let args_start = text.find("<args>")?;
-    let args_end = text.find("</args>")?;
-    let args_str = text[args_start + 6..args_end].trim().to_string();
+    // Fallback: try to find JSON tool call pattern in text
+    // e.g. write_file("path", "content") or write_file {"path": "..."}
+    let known_tools = ["write_file", "read_file", "edit_file", "list_dir", "run_command",
+                       "search_content", "create_file", "delete_file", "search_files",
+                       "glob_files", "git_status", "git_diff", "git_commit", "git_log",
+                       "grep", "find", "curl", "sed", "wc", "codebase_search",
+                       "update_memory", "web_search", "open_in_editor"];
 
-    Some((tool_name, args_str))
+    for tool in &known_tools {
+        if let Some(pos) = text.find(tool) {
+            // Look for JSON object after the tool name
+            let after = &text[pos + tool.len()..];
+            if let Some(json_start) = after.find('{') {
+                let json_part = &after[json_start..];
+                // Find matching closing brace
+                let mut depth = 0;
+                for (i, ch) in json_part.char_indices() {
+                    match ch {
+                        '{' => depth += 1,
+                        '}' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                let json_str = &json_part[..=i];
+                                if serde_json::from_str::<serde_json::Value>(json_str).is_ok() {
+                                    return Some((tool.to_string(), json_str.to_string()));
+                                }
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]

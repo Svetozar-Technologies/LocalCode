@@ -96,9 +96,75 @@ interface AppState {
   setQuickOpenVisible: (visible: boolean) => void;
   toggleQuickOpen: () => void;
 
+  // Auto Save
+  autoSave: boolean;
+  setAutoSave: (enabled: boolean) => void;
+  autoSaveDelay: number;
+  setAutoSaveDelay: (delay: number) => void;
+
   // Inline Edit
   inlineEditVisible: boolean;
   setInlineEditVisible: (visible: boolean) => void;
+
+  // Find & Replace
+  showFindReplace: boolean;
+  toggleFindReplace: () => void;
+  setShowFindReplace: (visible: boolean) => void;
+
+  // Blame View
+  showBlameView: boolean;
+  blameFilePath: string | null;
+  setShowBlameView: (visible: boolean) => void;
+  setBlameFilePath: (path: string | null) => void;
+
+  // Split Editor
+  splitEditorMode: 'off' | 'horizontal' | 'vertical';
+  splitEditorRightPath: string | null;
+  setSplitEditorMode: (mode: 'off' | 'horizontal' | 'vertical') => void;
+  setSplitEditorRightPath: (path: string | null) => void;
+
+  // Command Palette
+  commandPaletteVisible: boolean;
+  toggleCommandPalette: () => void;
+
+  // Multi-Model Selector
+  selectedProvider: string;
+  setSelectedProvider: (provider: string) => void;
+
+  // Pending Agent Changes (Inline Diff Review)
+  pendingAgentChanges: Record<string, { original: string; modified: string }>;
+  addPendingAgentChange: (path: string, original: string, modified: string) => void;
+  removePendingAgentChange: (path: string) => void;
+  clearPendingAgentChanges: () => void;
+
+  // Markdown Preview (Feature 4)
+  markdownPreviewVisible: boolean;
+  toggleMarkdownPreview: () => void;
+
+  // Agent Plan Mode (Feature 7)
+  agentPlanMode: boolean;
+  setAgentPlanMode: (enabled: boolean) => void;
+  agentPlan: string | null;
+  setAgentPlan: (plan: string | null) => void;
+
+  // Checkpoints / Session Restore (Feature 11)
+  checkpoints: Array<{ id: string; timestamp: number; files: Record<string, string> }>;
+  createCheckpoint: () => void;
+  restoreCheckpoint: (id: string) => void;
+
+  // App Preview (Feature 13)
+  appPreviewVisible: boolean;
+  appPreviewUrl: string;
+  toggleAppPreview: () => void;
+  setAppPreviewUrl: (url: string) => void;
+
+  // Code Review (Feature 15)
+  reviewComments: Array<{ file: string; line: number; severity: string; message: string }>;
+  setReviewComments: (comments: Array<{ file: string; line: number; severity: string; message: string }>) => void;
+
+  // Codebase Map (Feature 19)
+  codebaseMapVisible: boolean;
+  toggleCodebaseMap: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -254,9 +320,113 @@ export const useAppStore = create<AppState>((set) => ({
   setQuickOpenVisible: (visible) => set({ quickOpenVisible: visible }),
   toggleQuickOpen: () => set((state) => ({ quickOpenVisible: !state.quickOpenVisible })),
 
+  // Auto Save
+  autoSave: localStorage.getItem('localcode-autosave') !== 'false',
+  setAutoSave: (enabled) => {
+    localStorage.setItem('localcode-autosave', String(enabled));
+    set({ autoSave: enabled });
+  },
+  autoSaveDelay: Number(localStorage.getItem('localcode-autosave-delay')) || 1000,
+  setAutoSaveDelay: (delay) => {
+    localStorage.setItem('localcode-autosave-delay', String(delay));
+    set({ autoSaveDelay: delay });
+  },
+
   // Inline Edit
   inlineEditVisible: false,
   setInlineEditVisible: (visible) => set({ inlineEditVisible: visible }),
+
+  // Find & Replace
+  showFindReplace: false,
+  toggleFindReplace: () => set((state) => ({ showFindReplace: !state.showFindReplace })),
+  setShowFindReplace: (visible) => set({ showFindReplace: visible }),
+
+  // Blame View
+  showBlameView: false,
+  blameFilePath: null,
+  setShowBlameView: (visible) => set({ showBlameView: visible }),
+  setBlameFilePath: (path) => set({ blameFilePath: path }),
+
+  // Split Editor
+  splitEditorMode: 'off',
+  splitEditorRightPath: null,
+  setSplitEditorMode: (mode) => set({ splitEditorMode: mode }),
+  setSplitEditorRightPath: (path) => set({ splitEditorRightPath: path }),
+
+  // Command Palette
+  commandPaletteVisible: false,
+  toggleCommandPalette: () => set((state) => ({ commandPaletteVisible: !state.commandPaletteVisible })),
+
+  // Multi-Model Selector
+  selectedProvider: localStorage.getItem('localcode-selected-provider') || 'local',
+  setSelectedProvider: (provider) => {
+    localStorage.setItem('localcode-selected-provider', provider);
+    set({ selectedProvider: provider });
+  },
+
+  // Pending Agent Changes (Inline Diff Review)
+  pendingAgentChanges: {},
+  addPendingAgentChange: (path, original, modified) =>
+    set((state) => ({
+      pendingAgentChanges: { ...state.pendingAgentChanges, [path]: { original, modified } },
+    })),
+  removePendingAgentChange: (path) =>
+    set((state) => {
+      const next = { ...state.pendingAgentChanges };
+      delete next[path];
+      return { pendingAgentChanges: next };
+    }),
+  clearPendingAgentChanges: () => set({ pendingAgentChanges: {} }),
+
+  // Markdown Preview
+  markdownPreviewVisible: false,
+  toggleMarkdownPreview: () => set((state) => ({ markdownPreviewVisible: !state.markdownPreviewVisible })),
+
+  // Agent Plan Mode
+  agentPlanMode: false,
+  setAgentPlanMode: (enabled) => set({ agentPlanMode: enabled }),
+  agentPlan: null,
+  setAgentPlan: (plan) => set({ agentPlan: plan }),
+
+  // Checkpoints
+  checkpoints: [],
+  createCheckpoint: () =>
+    set((state) => {
+      const files: Record<string, string> = {};
+      state.openFiles.forEach((f) => { files[f.path] = f.content; });
+      const cp = {
+        id: `cp-${Date.now()}`,
+        timestamp: Date.now(),
+        files,
+      };
+      return { checkpoints: [cp, ...state.checkpoints].slice(0, 5) };
+    }),
+  restoreCheckpoint: (id) =>
+    set((state) => {
+      const cp = state.checkpoints.find((c) => c.id === id);
+      if (!cp) return {};
+      return {
+        openFiles: state.openFiles.map((f) =>
+          cp.files[f.path] !== undefined
+            ? { ...f, content: cp.files[f.path], modified: true }
+            : f
+        ),
+      };
+    }),
+
+  // App Preview
+  appPreviewVisible: false,
+  appPreviewUrl: 'http://localhost:3000',
+  toggleAppPreview: () => set((state) => ({ appPreviewVisible: !state.appPreviewVisible })),
+  setAppPreviewUrl: (url) => set({ appPreviewUrl: url }),
+
+  // Code Review
+  reviewComments: [],
+  setReviewComments: (comments) => set({ reviewComments: comments }),
+
+  // Codebase Map
+  codebaseMapVisible: false,
+  toggleCodebaseMap: () => set((state) => ({ codebaseMapVisible: !state.codebaseMapVisible })),
 }));
 
 function toggleDirRecursive(tree: FileEntry[], path: string): FileEntry[] {

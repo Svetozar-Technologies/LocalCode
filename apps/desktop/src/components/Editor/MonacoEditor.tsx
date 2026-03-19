@@ -4,7 +4,14 @@ import type { editor } from 'monaco-editor';
 import { useAppStore } from '../../stores/appStore';
 import { invoke } from '@tauri-apps/api/core';
 import { useInlineCompletion } from '../../hooks/useInlineCompletion';
+import { useNextEditSuggestion } from '../../hooks/useNextEditSuggestion';
+import { useLspFeatures } from '../../hooks/useLspFeatures';
 import InlineEdit from './InlineEdit';
+import { listen } from '@tauri-apps/api/event';
+
+interface MonacoEditorProps {
+  onEditorMount?: (editor: editor.IStandaloneCodeEditor) => void;
+}
 
 /** Map store theme names to Monaco theme IDs */
 const THEME_MAP: Record<string, string> = {
@@ -181,10 +188,12 @@ function registerAllThemes(monaco: any) {
   });
 }
 
-export default function MonacoEditor() {
-  const { openFiles, activeFile, updateFileContent, markFileSaved, theme } = useAppStore();
+export default function MonacoEditor({ onEditorMount }: MonacoEditorProps = {}) {
+  const { openFiles, activeFile, updateFileContent, markFileSaved, theme, autoSave, autoSaveDelay, pendingAgentChanges, removePendingAgentChange } = useAppStore();
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const modelsRef = useRef<Map<string, editor.ITextModel>>(new Map());
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const decorationsRef = useRef<string[]>([]);
 
   const activeFileData = openFiles.find((f) => f.path === activeFile);
   const monacoTheme = THEME_MAP[theme] || 'localcode-dark';
@@ -192,11 +201,20 @@ export default function MonacoEditor() {
   // Wire up inline completion
   useInlineCompletion(editorRef.current);
 
+  // Wire up next edit suggestions (Feature 8)
+  useNextEditSuggestion(editorRef.current);
+
+  // Wire up LSP features (Feature 16)
+  useLspFeatures(editorRef.current);
+
   const handleEditorMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
     registerAllThemes(monaco);
     monaco.editor.setTheme(monacoTheme);
     applyCSS(theme);
+
+    // Expose editor instance to parent
+    onEditorMount?.(editor);
 
     // Track selection changes for @selection mention
     editor.onDidChangeCursorSelection(() => {
@@ -223,7 +241,7 @@ export default function MonacoEditor() {
         console.error('Save failed:', err);
       }
     });
-  }, [markFileSaved, monacoTheme, theme]);
+  }, [markFileSaved, monacoTheme, theme, onEditorMount]);
 
   // React to theme changes
   useEffect(() => {
@@ -256,12 +274,90 @@ export default function MonacoEditor() {
     }
   }, [activeFileData]);
 
+  // Listen for external file changes and reload content
+  useEffect(() => {
+    const unlisten = listen<{ path: string; kind: string }>('file-changed', async (event) => {
+      const changedPath = event.payload.path;
+      const model = modelsRef.current.get(changedPath);
+      if (model) {
+        try {
+          const content = await invoke<string>('read_file', { path: changedPath });
+          if (model.getValue() !== content) {
+            model.setValue(content);
+          }
+        } catch {
+          // File may have been deleted
+        }
+      }
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
+
+  // Highlight changed lines when agent edits are pending
+  const pendingChange = activeFile ? pendingAgentChanges[activeFile] : undefined;
+
+  useEffect(() => {
+    const ed = editorRef.current;
+    const monaco = (window as any).monaco;
+    if (!ed || !monaco || !activeFile) {
+      decorationsRef.current = ed?.deltaDecorations?.(decorationsRef.current, []) || [];
+      return;
+    }
+
+    if (!pendingChange) {
+      decorationsRef.current = ed.deltaDecorations(decorationsRef.current, []);
+      return;
+    }
+
+    // Diff original vs modified to find changed lines
+    const origLines = pendingChange.original.split('\n');
+    const modLines = pendingChange.modified.split('\n');
+    const decorations: any[] = [];
+
+    for (let i = 0; i < modLines.length; i++) {
+      if (i >= origLines.length || origLines[i] !== modLines[i]) {
+        decorations.push({
+          range: new monaco.Range(i + 1, 1, i + 1, 1),
+          options: {
+            isWholeLine: true,
+            className: 'agent-change-added',
+            glyphMarginClassName: 'agent-change-added',
+          },
+        });
+      }
+    }
+
+    decorationsRef.current = ed.deltaDecorations(decorationsRef.current, decorations);
+  }, [pendingChange, activeFile]);
+
+  const handleAcceptChange = useCallback(() => {
+    if (activeFile) removePendingAgentChange(activeFile);
+  }, [activeFile, removePendingAgentChange]);
+
+  const handleRejectChange = useCallback(async () => {
+    if (!activeFile || !pendingChange) return;
+    try {
+      await invoke('write_file', { path: activeFile, content: pendingChange.original });
+      // Update editor model
+      const model = modelsRef.current.get(activeFile);
+      if (model) model.setValue(pendingChange.original);
+      updateFileContent(activeFile, pendingChange.original);
+      markFileSaved(activeFile);
+      removePendingAgentChange(activeFile);
+    } catch (err) {
+      console.error('Reject failed:', err);
+    }
+  }, [activeFile, pendingChange, removePendingAgentChange, updateFileContent, markFileSaved]);
+
   if (!activeFileData) {
     return (
       <div className="welcome-screen">
         <h1>LocalCode</h1>
         <p>Privacy-first AI-powered code editor</p>
         <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="shortcut"><kbd>Cmd+Shift+P</kbd> Command Palette</div>
           <div className="shortcut"><kbd>Cmd+P</kbd> Quick Open File</div>
           <div className="shortcut"><kbd>Cmd+K</kbd> Inline Edit Selection</div>
           <div className="shortcut"><kbd>Cmd+F</kbd> Find in File</div>
@@ -270,6 +366,8 @@ export default function MonacoEditor() {
           <div className="shortcut"><kbd>Cmd+I</kbd> AI Chat</div>
           <div className="shortcut"><kbd>Cmd+B</kbd> Toggle Sidebar</div>
           <div className="shortcut"><kbd>Cmd+Shift+I</kbd> Composer</div>
+          <div className="shortcut"><kbd>Cmd+D</kbd> Add Selection to Next Match</div>
+          <div className="shortcut"><kbd>Alt+Click</kbd> Add Cursor</div>
         </div>
       </div>
     );
@@ -278,6 +376,55 @@ export default function MonacoEditor() {
   return (
     <div style={{ position: 'relative', height: '100%' }}>
       <InlineEdit editorInstance={editorRef.current} />
+      {pendingChange && (
+        <div style={{
+          position: 'absolute',
+          top: 8,
+          right: 24,
+          zIndex: 10,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          background: 'var(--bg-secondary)',
+          border: '1px solid var(--accent-green)',
+          borderRadius: 6,
+          padding: '6px 12px',
+          fontSize: 12,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+        }}>
+          <span style={{ color: 'var(--accent-green)', fontWeight: 600 }}>Agent changes pending</span>
+          <button
+            onClick={handleAcceptChange}
+            style={{
+              background: 'var(--accent-green)',
+              border: 'none',
+              borderRadius: 4,
+              color: '#1e1e1e',
+              padding: '3px 10px',
+              cursor: 'pointer',
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            Accept
+          </button>
+          <button
+            onClick={handleRejectChange}
+            style={{
+              background: 'none',
+              border: '1px solid var(--accent-red)',
+              borderRadius: 4,
+              color: 'var(--accent-red)',
+              padding: '3px 10px',
+              cursor: 'pointer',
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            Reject
+          </button>
+        </div>
+      )}
       <Editor
         height="100%"
         defaultLanguage={activeFileData.language}
@@ -287,6 +434,19 @@ export default function MonacoEditor() {
         onChange={(value) => {
           if (value !== undefined && activeFile) {
             updateFileContent(activeFile, value);
+            // Auto-save with debounce
+            if (autoSave) {
+              if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+              const filePath = activeFile;
+              autoSaveTimerRef.current = setTimeout(async () => {
+                try {
+                  await invoke('write_file', { path: filePath, content: value });
+                  useAppStore.getState().markFileSaved(filePath);
+                } catch (err) {
+                  console.error('Auto-save failed:', err);
+                }
+              }, autoSaveDelay);
+            }
           }
         }}
         options={{
@@ -308,6 +468,14 @@ export default function MonacoEditor() {
           wordWrap: 'off',
           automaticLayout: true,
           inlineSuggest: { enabled: true },
+          stickyScroll: { enabled: true },
+          cursorSurroundingLines: 5,
+          linkedEditing: true,
+          formatOnPaste: true,
+          folding: true,
+          foldingStrategy: 'indentation',
+          showFoldingControls: 'mouseover',
+          snippetSuggestions: 'inline',
         }}
       />
     </div>

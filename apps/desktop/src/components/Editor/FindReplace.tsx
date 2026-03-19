@@ -13,7 +13,7 @@ const styles = {
     top: 0,
     right: 20,
     zIndex: 50,
-    background: '#252526',
+    background: 'var(--bg-secondary)',
     border: '1px solid #3c3c3c',
     borderTop: 'none',
     borderRadius: '0 0 4px 4px',
@@ -32,10 +32,10 @@ const styles = {
   } as React.CSSProperties,
   input: {
     flex: 1,
-    background: '#3c3c3c',
+    background: 'var(--border-color)',
     border: '1px solid #3c3c3c',
     borderRadius: 3,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     padding: '4px 8px',
     fontSize: 13,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', 'Menlo', monospace",
@@ -54,7 +54,7 @@ const styles = {
     background: 'none',
     border: '1px solid transparent',
     borderRadius: 3,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     fontSize: 12,
     fontWeight: 600,
@@ -63,7 +63,7 @@ const styles = {
   toggleButtonActive: {
     background: '#264f78',
     borderColor: '#007acc',
-    color: '#cccccc',
+    color: 'var(--text-primary)',
   } as React.CSSProperties,
   actionButton: {
     width: 26,
@@ -74,13 +74,13 @@ const styles = {
     background: 'none',
     border: 'none',
     borderRadius: 3,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     cursor: 'pointer',
     flexShrink: 0,
   } as React.CSSProperties,
   matchInfo: {
     fontSize: 11,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     padding: '0 6px',
     whiteSpace: 'nowrap' as const,
     flexShrink: 0,
@@ -96,7 +96,7 @@ const styles = {
     background: 'none',
     border: 'none',
     borderRadius: 3,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     marginLeft: 4,
     flexShrink: 0,
@@ -109,7 +109,7 @@ const styles = {
     justifyContent: 'center',
     background: 'none',
     border: 'none',
-    color: '#969696',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     flexShrink: 0,
   } as React.CSSProperties,
@@ -358,7 +358,7 @@ export default function FindReplace({ editorInstance, visible, onClose }: FindRe
           style={styles.actionButton}
           onClick={findPrevious}
           title="Previous Match (Shift+Enter)"
-          onMouseEnter={(e) => { (e.target as HTMLElement).style.background = '#2a2d2e'; }}
+          onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'var(--bg-hover)'; }}
           onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none'; }}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -369,7 +369,7 @@ export default function FindReplace({ editorInstance, visible, onClose }: FindRe
           style={styles.actionButton}
           onClick={findNext}
           title="Next Match (Enter)"
-          onMouseEnter={(e) => { (e.target as HTMLElement).style.background = '#2a2d2e'; }}
+          onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'var(--bg-hover)'; }}
           onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none'; }}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -380,7 +380,7 @@ export default function FindReplace({ editorInstance, visible, onClose }: FindRe
           style={styles.closeButton}
           onClick={onClose}
           title="Close (Escape)"
-          onMouseEnter={(e) => { (e.target as HTMLElement).style.background = '#2a2d2e'; }}
+          onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'var(--bg-hover)'; }}
           onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none'; }}
         >
           <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
@@ -409,7 +409,7 @@ export default function FindReplace({ editorInstance, visible, onClose }: FindRe
             style={styles.actionButton}
             onClick={replaceCurrent}
             title="Replace (Ctrl+Shift+1)"
-            onMouseEnter={(e) => { (e.target as HTMLElement).style.background = '#2a2d2e'; }}
+            onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'var(--bg-hover)'; }}
             onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none'; }}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -420,7 +420,7 @@ export default function FindReplace({ editorInstance, visible, onClose }: FindRe
             style={styles.actionButton}
             onClick={replaceAll}
             title="Replace All (Ctrl+Alt+Enter)"
-            onMouseEnter={(e) => { (e.target as HTMLElement).style.background = '#2a2d2e'; }}
+            onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'var(--bg-hover)'; }}
             onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none'; }}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">

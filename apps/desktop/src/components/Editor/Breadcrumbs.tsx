@@ -14,8 +14,8 @@ const styles = {
     padding: '0 12px',
     height: 26,
     minHeight: 26,
-    background: '#1e1e1e',
-    borderBottom: '1px solid #3c3c3c',
+    background: 'var(--bg-primary)',
+    borderBottom: '1px solid var(--border-color)',
     overflow: 'hidden',
     fontSize: 12,
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -30,7 +30,7 @@ const styles = {
   segment: {
     display: 'inline-flex',
     alignItems: 'center',
-    color: '#969696',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     padding: '2px 4px',
     borderRadius: 3,
@@ -39,18 +39,18 @@ const styles = {
     flexShrink: 0,
   } as React.CSSProperties,
   segmentHover: {
-    color: '#cccccc',
-    background: '#2a2d2e',
+    color: 'var(--text-primary)',
+    background: 'var(--bg-hover)',
   } as React.CSSProperties,
   separator: {
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     margin: '0 2px',
     fontSize: 11,
     flexShrink: 0,
     userSelect: 'none' as const,
   } as React.CSSProperties,
   fileSegment: {
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     fontWeight: 500,
   } as React.CSSProperties,
   icon: {
@@ -156,7 +156,7 @@ export default function Breadcrumbs({ filePath, projectRoot }: BreadcrumbsProps)
               }}
               onMouseLeave={(e) => {
                 if (!segment.isLast) {
-                  (e.target as HTMLElement).style.color = '#969696';
+                  (e.target as HTMLElement).style.color = 'var(--text-secondary)';
                   (e.target as HTMLElement).style.background = 'transparent';
                 }
               }}
@@ -166,7 +166,7 @@ export default function Breadcrumbs({ filePath, projectRoot }: BreadcrumbsProps)
                   <path d="M14.5 3H7.71l-.85-.85L6.51 2h-5l-.5.5v11l.5.5h13l.5-.5v-10L14.5 3zm-.51 8.49V13h-12V3h4.29l.85.85.36.15H14v7.49z" />
                 </svg>
               ) : (
-                <svg style={styles.icon} viewBox="0 0 16 16" fill="#cccccc">
+                <svg style={styles.icon} viewBox="0 0 16 16" fill="var(--text-primary)">
                   <path d="M13.71 4.29l-3-3L10 1H4L3 2v12l1 1h9l1-1V5l-.29-.71zM13 14H4V2h5v4h4v8z" />
                 </svg>
               )}

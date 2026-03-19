@@ -17,24 +17,24 @@ const styles = {
     width: '100%',
     height: '100%',
     overflow: 'hidden',
-    background: '#1e1e1e',
+    background: 'var(--bg-primary)',
   } as React.CSSProperties,
   toolbar: {
     display: 'flex',
     alignItems: 'center',
     gap: 4,
     padding: '4px 8px',
-    background: '#252526',
+    background: 'var(--bg-secondary)',
     borderBottom: '1px solid #3c3c3c',
     fontSize: 12,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     flexShrink: 0,
   } as React.CSSProperties,
   toolbarButton: {
     background: 'none',
     border: '1px solid #3c3c3c',
     borderRadius: 3,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     padding: '2px 8px',
     cursor: 'pointer',
     fontSize: 11,
@@ -54,17 +54,17 @@ const styles = {
   } as React.CSSProperties,
   paneHeader: {
     padding: '4px 12px',
-    background: '#2d2d2d',
+    background: 'var(--bg-tertiary)',
     borderBottom: '1px solid #3c3c3c',
     fontSize: 12,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     whiteSpace: 'nowrap' as const,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     flexShrink: 0,
   } as React.CSSProperties,
   divider: {
-    background: '#3c3c3c',
+    background: 'var(--border-color)',
     flexShrink: 0,
     transition: 'background 0.15s',
   } as React.CSSProperties,
@@ -180,7 +180,7 @@ export default function SplitEditor({ leftPath, rightPath, diffMode = false }: S
 
   if (loading) {
     return (
-      <div style={{ ...styles.container, alignItems: 'center', justifyContent: 'center', color: '#969696' }}>
+      <div style={{ ...styles.container, alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
         Loading files...
       </div>
     );
@@ -287,7 +287,7 @@ export default function SplitEditor({ leftPath, rightPath, diffMode = false }: S
           }}
           onMouseLeave={(e) => {
             if (!draggingRef.current) {
-              (e.target as HTMLElement).style.background = '#3c3c3c';
+              (e.target as HTMLElement).style.background = 'var(--border-color)';
             }
           }}
         />

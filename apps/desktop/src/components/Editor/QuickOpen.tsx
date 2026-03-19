@@ -28,8 +28,8 @@ const styles = {
   container: {
     width: 560,
     maxHeight: 420,
-    background: '#252526',
-    border: '1px solid #3c3c3c',
+    background: 'var(--bg-secondary)',
+    border: '1px solid var(--border-color)',
     borderRadius: 6,
     boxShadow: '0 12px 40px rgba(0, 0, 0, 0.5)',
     display: 'flex',
@@ -41,18 +41,18 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     padding: '8px 12px',
-    borderBottom: '1px solid #3c3c3c',
+    borderBottom: '1px solid var(--border-color)',
     gap: 8,
   } as React.CSSProperties,
   searchIcon: {
-    color: '#969696',
+    color: 'var(--text-secondary)',
     flexShrink: 0,
   } as React.CSSProperties,
   input: {
     flex: 1,
     background: 'transparent',
     border: 'none',
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     fontSize: 14,
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     outline: 'none',
@@ -76,21 +76,21 @@ const styles = {
     background: '#062f4a',
   } as React.CSSProperties,
   resultItemHover: {
-    background: '#2a2d2e',
+    background: 'var(--bg-hover)',
   } as React.CSSProperties,
   fileIcon: {
     flexShrink: 0,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
   } as React.CSSProperties,
   fileName: {
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     fontWeight: 500,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap' as const,
   } as React.CSSProperties,
   filePath: {
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     fontSize: 11,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
@@ -106,13 +106,13 @@ const styles = {
   empty: {
     padding: 20,
     textAlign: 'center' as const,
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     fontSize: 13,
   } as React.CSSProperties,
   loading: {
     padding: 16,
     textAlign: 'center' as const,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     fontSize: 12,
   } as React.CSSProperties,
   footer: {
@@ -120,18 +120,18 @@ const styles = {
     alignItems: 'center',
     gap: 12,
     padding: '6px 12px',
-    borderTop: '1px solid #3c3c3c',
+    borderTop: '1px solid var(--border-color)',
     fontSize: 11,
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
   } as React.CSSProperties,
   footerKbd: {
     background: '#2d2d2d',
-    border: '1px solid #3c3c3c',
+    border: '1px solid var(--border-color)',
     borderRadius: 3,
     padding: '1px 5px',
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', 'Menlo', monospace",
     fontSize: 10,
-    color: '#969696',
+    color: 'var(--text-secondary)',
   } as React.CSSProperties,
 };
 
@@ -143,7 +143,7 @@ const EXT_COLORS: Record<string, string> = {
 
 function getFileColor(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase() || '';
-  return EXT_COLORS[ext] || '#cccccc';
+  return EXT_COLORS[ext] || 'var(--text-primary)';
 }
 
 function getLanguageFromPath(path: string): string {

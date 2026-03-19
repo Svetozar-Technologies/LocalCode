@@ -10,11 +10,12 @@ import GitPanel from './components/Git/GitPanel';
 import DebugPanel from './components/Debug/DebugPanel';
 import SettingsPanel from './components/Settings/SettingsPanel';
 import QuickOpen from './components/Editor/QuickOpen';
+import CommandPalette from './components/Editor/CommandPalette';
 import Composer from './components/Composer/Composer';
 import { useAppStore } from './stores/appStore';
 
 function Sidebar() {
-  const { sidebarView, sidebarWidth } = useAppStore();
+  const { sidebarView, sidebarWidth, chatPanelVisible } = useAppStore();
 
   return (
     <div className="sidebar" style={{ width: sidebarWidth, minWidth: 180, maxWidth: 500 }}>
@@ -37,10 +38,24 @@ function Sidebar() {
         </>
       )}
       {sidebarView === 'ai' && (
-        <>
-          <div className="sidebar-header">AI Assistant</div>
-          <ChatPanel />
-        </>
+        chatPanelVisible ? (
+          <div className="sidebar" style={{ padding: 16, color: 'var(--text-secondary)', fontSize: 13 }}>
+            <div className="sidebar-header">AI Assistant</div>
+            <p style={{ margin: '12px 0' }}>AI Chat is open in the right panel.</p>
+            <button
+              className="action-btn"
+              style={{ fontSize: 12, padding: '4px 10px' }}
+              onClick={() => useAppStore.getState().toggleChatPanel()}
+            >
+              Move here
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="sidebar-header">AI Assistant</div>
+            <ChatPanel />
+          </>
+        )
       )}
       {sidebarView === 'debug' && (
         <>
@@ -150,6 +165,11 @@ function App() {
           const store = useAppStore.getState();
           store.setSidebarWidth(store.sidebarWidth > 0 ? 0 : 260);
         }
+        if (e.key === 'p' && e.shiftKey) {
+          e.preventDefault();
+          useAppStore.getState().toggleCommandPalette();
+          return;
+        }
         if (e.key === 'p') {
           e.preventDefault();
           useAppStore.getState().toggleQuickOpen();
@@ -157,6 +177,23 @@ function App() {
         if (e.key === 'k') {
           e.preventDefault();
           useAppStore.getState().setInlineEditVisible(true);
+        }
+        if (e.key === 'f' && !e.shiftKey) {
+          e.preventDefault();
+          useAppStore.getState().toggleFindReplace();
+        }
+        if (e.key === '\\') {
+          e.preventDefault();
+          const store = useAppStore.getState();
+          if (store.splitEditorMode !== 'off') {
+            store.setSplitEditorMode('off');
+            store.setSplitEditorRightPath(null);
+          } else if (store.activeFile) {
+            // Pick the next open file as the right pane, or same file
+            const otherFile = store.openFiles.find((f) => f.path !== store.activeFile);
+            store.setSplitEditorRightPath(otherFile ? otherFile.path : store.activeFile);
+            store.setSplitEditorMode('horizontal');
+          }
         }
         // Cmd+Shift+I for Composer
         if (e.key === 'i' && e.shiftKey) {
@@ -172,12 +209,17 @@ function App() {
   }, [toggleTerminal]);
 
   const quickOpenVisible = useAppStore((s) => s.quickOpenVisible);
+  const commandPaletteVisible = useAppStore((s) => s.commandPaletteVisible);
 
   return (
     <div className="app-container">
       <QuickOpen
         visible={quickOpenVisible}
         onClose={() => useAppStore.getState().setQuickOpenVisible(false)}
+      />
+      <CommandPalette
+        visible={commandPaletteVisible}
+        onClose={() => useAppStore.getState().toggleCommandPalette()}
       />
       <div className="app-main">
         <ActivityBar />

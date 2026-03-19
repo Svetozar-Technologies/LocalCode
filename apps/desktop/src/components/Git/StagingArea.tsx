@@ -17,20 +17,20 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     padding: '6px 12px',
-    background: '#2d2d2d',
-    borderBottom: '1px solid #3c3c3c',
+    background: 'var(--bg-tertiary)',
+    borderBottom: '1px solid var(--border-color)',
     fontSize: 11,
     fontWeight: 600,
     textTransform: 'uppercase' as const,
     letterSpacing: 0.5,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     userSelect: 'none' as const,
     gap: 6,
   } as React.CSSProperties,
   count: {
-    background: '#3c3c3c',
-    color: '#cccccc',
+    background: 'var(--border-color)',
+    color: 'var(--text-primary)',
     borderRadius: 8,
     padding: '0 6px',
     fontSize: 10,
@@ -40,7 +40,7 @@ const styles = {
     marginLeft: 'auto',
     background: 'none',
     border: 'none',
-    color: '#969696',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     padding: '2px 4px',
     borderRadius: 3,
@@ -62,14 +62,14 @@ const styles = {
     transition: 'background 0.05s',
   } as React.CSSProperties,
   fileItemHover: {
-    background: '#2a2d2e',
+    background: 'var(--bg-hover)',
   } as React.CSSProperties,
   fileName: {
     flex: 1,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap' as const,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
   } as React.CSSProperties,
   statusBadge: {
     fontSize: 10,
@@ -87,7 +87,7 @@ const styles = {
     background: 'none',
     border: 'none',
     borderRadius: 3,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     flexShrink: 0,
     opacity: 0,
@@ -95,7 +95,7 @@ const styles = {
   } as React.CSSProperties,
   empty: {
     padding: '12px 16px',
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     fontSize: 12,
     textAlign: 'center' as const,
   } as React.CSSProperties,
@@ -114,7 +114,7 @@ function getStatusColor(status: string): string {
     case 'deleted': return '#f44747';
     case 'untracked': return '#4ec9b0';
     case 'renamed': return '#569cd6';
-    default: return '#cccccc';
+    default: return 'var(--text-primary)';
   }
 }
 
@@ -157,7 +157,7 @@ function FileItem({ file, staged, onStageToggle, onOpenFile }: FileItemProps) {
       <span style={styles.fileName} title={file.path}>
         {fileName}
         {dirPath && (
-          <span style={{ color: '#6a6a6a', marginLeft: 6, fontSize: 11 }}>{dirPath}</span>
+          <span style={{ color: 'var(--text-muted)', marginLeft: 6, fontSize: 11 }}>{dirPath}</span>
         )}
       </span>
       <button
@@ -170,8 +170,8 @@ function FileItem({ file, staged, onStageToggle, onOpenFile }: FileItemProps) {
           onStageToggle();
         }}
         title={staged ? 'Unstage' : 'Stage'}
-        onMouseEnter={(e) => { (e.target as HTMLElement).style.color = '#cccccc'; }}
-        onMouseLeave={(e) => { (e.target as HTMLElement).style.color = '#969696'; }}
+        onMouseEnter={(e) => { (e.target as HTMLElement).style.color = 'var(--text-primary)'; }}
+        onMouseLeave={(e) => { (e.target as HTMLElement).style.color = 'var(--text-secondary)'; }}
       >
         {staged ? (
           <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
@@ -317,8 +317,8 @@ export default function StagingArea({ onRefresh }: StagingAreaProps) {
               handleUnstageAll();
             }}
             title="Unstage All"
-            onMouseEnter={(e) => { (e.target as HTMLElement).style.color = '#cccccc'; }}
-            onMouseLeave={(e) => { (e.target as HTMLElement).style.color = '#969696'; }}
+            onMouseEnter={(e) => { (e.target as HTMLElement).style.color = 'var(--text-primary)'; }}
+            onMouseLeave={(e) => { (e.target as HTMLElement).style.color = 'var(--text-secondary)'; }}
           >
             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
               <path d="M4 8l4-4 .7.7L5.4 8l3.3 3.3-.7.7L4 8z" />
@@ -369,8 +369,8 @@ export default function StagingArea({ onRefresh }: StagingAreaProps) {
               handleStageAll();
             }}
             title="Stage All"
-            onMouseEnter={(e) => { (e.target as HTMLElement).style.color = '#cccccc'; }}
-            onMouseLeave={(e) => { (e.target as HTMLElement).style.color = '#969696'; }}
+            onMouseEnter={(e) => { (e.target as HTMLElement).style.color = 'var(--text-primary)'; }}
+            onMouseLeave={(e) => { (e.target as HTMLElement).style.color = 'var(--text-secondary)'; }}
           >
             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
               <path d="M14 7v1H8v6H7V8H1V7h6V1h1v6h6z" />

@@ -21,14 +21,14 @@ const styles = {
   } as React.CSSProperties,
   searchBar: {
     padding: '8px 12px',
-    borderBottom: '1px solid #3c3c3c',
+    borderBottom: '1px solid var(--border-color)',
   } as React.CSSProperties,
   searchInput: {
     width: '100%',
-    background: '#3c3c3c',
-    border: '1px solid #3c3c3c',
+    background: 'var(--border-color)',
+    border: '1px solid var(--border-color)',
     borderRadius: 3,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     padding: '5px 8px',
     fontSize: 12,
     outline: 'none',
@@ -42,13 +42,13 @@ const styles = {
     display: 'flex',
     flexDirection: 'column' as const,
     padding: '8px 12px',
-    borderBottom: '1px solid #2d2d2d',
+    borderBottom: '1px solid var(--bg-tertiary)',
     cursor: 'pointer',
     transition: 'background 0.05s',
     gap: 4,
   } as React.CSSProperties,
   commitItemHover: {
-    background: '#2a2d2e',
+    background: 'var(--bg-hover)',
   } as React.CSSProperties,
   commitItemSelected: {
     background: '#062f4a',
@@ -67,7 +67,7 @@ const styles = {
   } as React.CSSProperties,
   message: {
     fontSize: 13,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap' as const,
@@ -78,10 +78,10 @@ const styles = {
     alignItems: 'center',
     gap: 8,
     fontSize: 11,
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
   } as React.CSSProperties,
   author: {
-    color: '#969696',
+    color: 'var(--text-secondary)',
     fontWeight: 500,
   } as React.CSSProperties,
   date: {
@@ -105,7 +105,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     fontSize: 12,
   } as React.CSSProperties,
   empty: {
@@ -114,7 +114,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     fontSize: 13,
     gap: 8,
   } as React.CSSProperties,
@@ -130,11 +130,11 @@ const styles = {
     height: 8,
     borderRadius: '50%',
     background: '#007acc',
-    border: '2px solid #252526',
+    border: '2px solid var(--bg-secondary)',
   } as React.CSSProperties,
   line: {
     width: 2,
-    background: '#3c3c3c',
+    background: 'var(--border-color)',
     position: 'absolute' as const,
     top: 0,
     bottom: 0,
@@ -142,7 +142,11 @@ const styles = {
   } as React.CSSProperties,
 };
 
-export default function HistoryView() {
+interface HistoryViewProps {
+  fileFilter?: string | null;
+}
+
+export default function HistoryView({ fileFilter }: HistoryViewProps = {}) {
   const { projectPath } = useAppStore();
   const [commits, setCommits] = useState<GitCommit[]>([]);
   const [loading, setLoading] = useState(false);
@@ -158,11 +162,11 @@ export default function HistoryView() {
       setLoading(true);
 
       try {
-        const result = await invoke<GitCommit[]>('git_log', {
+        const result = await invoke<GitCommit[]>(fileFilter ? 'git_file_log' : 'git_log', {
           path: projectPath,
-          skip: pageNum * PAGE_SIZE,
-          limit: PAGE_SIZE,
-          search: searchQuery || undefined,
+          ...(fileFilter
+            ? { filePath: fileFilter, count: PAGE_SIZE }
+            : { skip: pageNum * PAGE_SIZE, limit: PAGE_SIZE, search: searchQuery || undefined }),
         });
 
         if (append) {
@@ -179,7 +183,7 @@ export default function HistoryView() {
 
       setLoading(false);
     },
-    [projectPath, searchQuery]
+    [projectPath, searchQuery, fileFilter]
   );
 
   useEffect(() => {
@@ -216,6 +220,11 @@ export default function HistoryView() {
 
   return (
     <div style={styles.container}>
+      {fileFilter && (
+        <div style={{ padding: '6px 12px', fontSize: 11, color: 'var(--accent)', background: 'rgba(0,122,204,0.08)', borderBottom: '1px solid var(--border-color)' }}>
+          History for: {fileFilter.split('/').pop()}
+        </div>
+      )}
       <div style={styles.searchBar}>
         <input
           style={styles.searchInput}
@@ -225,7 +234,7 @@ export default function HistoryView() {
           onChange={(e) => setSearchQuery(e.target.value)}
           onKeyDown={handleSearchKeyDown}
           onFocus={(e) => { (e.target as HTMLInputElement).style.borderColor = '#007acc'; }}
-          onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = '#3c3c3c'; }}
+          onBlur={(e) => { (e.target as HTMLInputElement).style.borderColor = 'var(--border-color)'; }}
         />
       </div>
 
@@ -236,7 +245,7 @@ export default function HistoryView() {
 
         {!loading && commits.length === 0 && (
           <div style={styles.empty}>
-            <svg width="24" height="24" viewBox="0 0 16 16" fill="#6a6a6a">
+            <svg width="24" height="24" viewBox="0 0 16 16" fill="var(--text-muted)">
               <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 13A6 6 0 118 2a6 6 0 010 12zm0-9.5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 018 4.5zm0 7a.75.75 0 100-1.5.75.75 0 000 1.5z" />
             </svg>
             <span>No commits found</span>
@@ -254,7 +263,7 @@ export default function HistoryView() {
             onClick={() => setSelectedHash(commit.hash === selectedHash ? null : commit.hash)}
             onMouseEnter={(e) => {
               if (selectedHash !== commit.hash) {
-                (e.currentTarget as HTMLElement).style.background = '#2a2d2e';
+                (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
               }
             }}
             onMouseLeave={(e) => {
@@ -295,7 +304,7 @@ export default function HistoryView() {
           <button
             style={styles.loadMoreButton}
             onClick={handleLoadMore}
-            onMouseEnter={(e) => { (e.target as HTMLElement).style.background = '#2a2d2e'; }}
+            onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'var(--bg-hover)'; }}
             onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none'; }}
           >
             Load more commits...

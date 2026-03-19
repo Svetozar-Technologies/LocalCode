@@ -63,36 +63,54 @@ pub async fn agent_execute(
         project_path
     };
 
+    let is_local = provider_name.as_deref().unwrap_or("local") == "local"
+        || provider_name.is_none();
+
     let mut registry = ToolRegistry::new();
-    builtin::register_all(&mut registry);
+    if is_local {
+        // Local models: register only essential tools to save context tokens
+        builtin::register_essential(&mut registry);
+    } else {
+        builtin::register_all(&mut registry);
+    }
 
     let mut engine = AgentEngine::new(provider.clone(), registry);
 
-    // Initialize memory, auto-discovery, and session
-    engine.initialize(&project_path);
-
-    // Add current file context to system prompt if available
-    if !current_file_content.is_empty() {
-        let file_ctx = format!(
-            "\n\nCurrent file ({}):\n```\n{}\n```",
-            current_file,
-            current_file_content.chars().take(4000).collect::<String>()
-        );
-        engine = engine.with_system_prompt(format!(
-            "You are LocalCode Agent, an autonomous AI coding assistant.{}",
-            file_ctx
-        ));
-        // Re-initialize to merge memory context
+    if is_local {
+        // For local models: skip heavy memory/discovery to save context tokens
+        // Just set a minimal system prompt
+        let mut prompt = String::from("You are LocalCode Agent.");
+        if !current_file.is_empty() && !current_file_content.is_empty() {
+            let truncated: String = current_file_content.chars().take(1000).collect();
+            prompt.push_str(&format!("\nCurrent file: {}\n```\n{}\n```", current_file, truncated));
+        }
+        engine = engine.with_system_prompt(prompt);
+    } else {
+        // For cloud models: use full memory and project discovery
         engine.initialize(&project_path);
+        if !current_file_content.is_empty() {
+            let file_ctx = format!(
+                "\n\nCurrent file ({}):\n```\n{}\n```",
+                current_file,
+                current_file_content.chars().take(4000).collect::<String>()
+            );
+            engine = engine.with_system_prompt(format!(
+                "You are LocalCode Agent, an autonomous AI coding assistant.{}",
+                file_ctx
+            ));
+            engine.initialize(&project_path);
+        }
     }
 
-    // Build task with conversation history for memory
-    let full_task = if let Some(ref history) = chat_history {
+    // Build task — keep it lean for local models
+    let full_task = if is_local {
+        // Local: just the task, no history (save tokens)
+        task
+    } else if let Some(ref history) = chat_history {
         if history.is_empty() {
             task
         } else {
-            let mut context = String::from("## Conversation History\nHere is what was discussed previously in this session:\n\n");
-            // Include last 10 messages max to avoid token overflow
+            let mut context = String::from("## Conversation History\n");
             let start = if history.len() > 10 { history.len() - 10 } else { 0 };
             for entry in &history[start..] {
                 let role_label = if entry.role == "user" { "User" } else { "Assistant" };
@@ -118,28 +136,34 @@ pub async fn agent_execute(
     let app_clone = app.clone();
     let rid = response_id.clone();
 
-    let result = engine
-        .execute(&full_task, &ctx, &move |event| match event {
-            AgentEvent::Step(step) => {
-                let _ = app_clone.emit(
-                    "agent-step",
-                    serde_json::json!({"id": rid, "step": step}),
-                );
-            }
-            AgentEvent::TextChunk(text) | AgentEvent::Done(text) => {
-                let _ = app_clone.emit(
-                    "llm-chat-chunk",
-                    serde_json::json!({"id": rid, "chunk": text}),
-                );
-            }
-            AgentEvent::Error(e) => {
-                let _ = app_clone.emit(
-                    "llm-chat-chunk",
-                    serde_json::json!({"id": rid, "chunk": format!("\n\nError: {}", e)}),
-                );
-            }
-        })
-        .await;
+    let event_handler = move |event: AgentEvent| match event {
+        AgentEvent::Step(step) => {
+            let _ = app_clone.emit(
+                "agent-step",
+                serde_json::json!({"id": rid, "step": step}),
+            );
+        }
+        AgentEvent::TextChunk(text) | AgentEvent::Done(text) => {
+            let _ = app_clone.emit(
+                "llm-chat-chunk",
+                serde_json::json!({"id": rid, "chunk": text}),
+            );
+        }
+        AgentEvent::Error(e) => {
+            let _ = app_clone.emit(
+                "llm-chat-chunk",
+                serde_json::json!({"id": rid, "chunk": format!("\n\nError: {}", e)}),
+            );
+        }
+    };
+
+    // Local models: force XML mode (lighter on tokens, no JSON tool definitions)
+    // Cloud models: auto-select based on provider capabilities
+    let result = if is_local {
+        engine.execute_xml(&full_task, &ctx, &event_handler).await
+    } else {
+        engine.execute(&full_task, &ctx, &event_handler).await
+    };
 
     if let Err(e) = result {
         let _ = app.emit(

@@ -12,14 +12,14 @@ const styles = {
     display: 'flex',
     flexDirection: 'column' as const,
     height: '100%',
-    background: '#252526',
+    background: 'var(--bg-secondary)',
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   } as React.CSSProperties,
   header: {
     display: 'flex',
     alignItems: 'center',
     padding: '8px 12px',
-    borderBottom: '1px solid #3c3c3c',
+    borderBottom: '1px solid var(--border-color)',
     gap: 8,
   } as React.CSSProperties,
   branchInfo: {
@@ -27,7 +27,7 @@ const styles = {
     alignItems: 'center',
     gap: 6,
     fontSize: 12,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
   } as React.CSSProperties,
   branchIcon: {
     color: '#569cd6',
@@ -39,7 +39,7 @@ const styles = {
     marginLeft: 'auto',
     background: 'none',
     border: 'none',
-    color: '#969696',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     width: 24,
     height: 24,
@@ -50,7 +50,7 @@ const styles = {
   } as React.CSSProperties,
   tabs: {
     display: 'flex',
-    borderBottom: '1px solid #3c3c3c',
+    borderBottom: '1px solid var(--border-color)',
   } as React.CSSProperties,
   tab: {
     flex: 1,
@@ -58,14 +58,14 @@ const styles = {
     background: 'none',
     border: 'none',
     borderBottom: '2px solid transparent',
-    color: '#969696',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     fontSize: 12,
     textAlign: 'center' as const,
     transition: 'color 0.1s, border-color 0.1s',
   } as React.CSSProperties,
   tabActive: {
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     borderBottomColor: '#007acc',
   } as React.CSSProperties,
   content: {
@@ -81,7 +81,7 @@ const styles = {
     justifyContent: 'center',
     padding: 32,
     gap: 12,
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     fontSize: 13,
     textAlign: 'center' as const,
   } as React.CSSProperties,
@@ -107,10 +107,11 @@ const styles = {
 };
 
 export default function GitPanel() {
-  const { projectPath, gitStatus, setGitStatus, currentBranch, setCurrentBranch } = useAppStore();
+  const { projectPath, gitStatus, setGitStatus, currentBranch, setCurrentBranch, reviewComments, setReviewComments, selectedProvider } = useAppStore();
   const [activeTab, setActiveTab] = useState<GitTab>('changes');
   const [loading, setLoading] = useState(false);
   const [isRepo, setIsRepo] = useState(true);
+  const [reviewing, setReviewing] = useState(false);
 
   const refreshStatus = useCallback(async () => {
     if (!projectPath) return;
@@ -155,7 +156,7 @@ export default function GitPanel() {
   if (!projectPath) {
     return (
       <div style={styles.noRepo}>
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="#6a6a6a">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="var(--text-muted)">
           <path d="M21.007 8.222A3.738 3.738 0 0 0 15.045 5.2a3.737 3.737 0 0 0 1.156 6.583 2.988 2.988 0 0 1-2.668 1.67h-2.99a4.456 4.456 0 0 0-2.989 1.165V7.4a3.737 3.737 0 1 0-1.494 0v9.117a3.776 3.776 0 1 0 1.816.099 2.99 2.99 0 0 1 2.668-1.667h2.99a4.484 4.484 0 0 0 4.223-3.039 3.736 3.736 0 0 0 3.25-3.687z" />
         </svg>
         <span>Open a folder to use Git</span>
@@ -166,7 +167,7 @@ export default function GitPanel() {
   if (!isRepo) {
     return (
       <div style={styles.noRepo}>
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="#6a6a6a">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="var(--text-muted)">
           <path d="M21.007 8.222A3.738 3.738 0 0 0 15.045 5.2a3.737 3.737 0 0 0 1.156 6.583 2.988 2.988 0 0 1-2.668 1.67h-2.99a4.456 4.456 0 0 0-2.989 1.165V7.4a3.737 3.737 0 1 0-1.494 0v9.117a3.776 3.776 0 1 0 1.816.099 2.99 2.99 0 0 1 2.668-1.667h2.99a4.484 4.484 0 0 0 4.223-3.039 3.736 3.736 0 0 0 3.25-3.687z" />
         </svg>
         <span>This folder is not a Git repository.</span>
@@ -182,6 +183,71 @@ export default function GitPanel() {
     );
   }
 
+  // Feature 15: AI Code Review
+  const handleAIReview = useCallback(async () => {
+    if (!projectPath || reviewing) return;
+    setReviewing(true);
+    try {
+      const diff = await invoke<string>('git_diff', { path: projectPath });
+      if (!diff || diff.trim().length === 0) {
+        setReviewing(false);
+        return;
+      }
+      const reviewId = `review-${Date.now()}`;
+      const providerName = selectedProvider !== 'local' ? selectedProvider : undefined;
+      let result = '';
+      const { listen: listenEvent } = await import('@tauri-apps/api/event');
+      const unlisten = await listenEvent<{ id: string; chunk: string }>('llm-chat-chunk', (event) => {
+        if (event.payload.id === reviewId) {
+          result += event.payload.chunk;
+        }
+      });
+      const unlistenDone = await listenEvent<{ id: string }>('llm-chat-done', (event) => {
+        if (event.payload.id === reviewId) {
+          // Parse review comments
+          const comments: Array<{ file: string; line: number; severity: string; message: string }> = [];
+          const lines = result.split('\n');
+          for (const line of lines) {
+            const match = line.match(/^(?:\[?(error|warning|info|suggestion|critical)\]?)\s*(.+?):(\d+)\s*[-:]\s*(.+)/i);
+            if (match) {
+              comments.push({
+                severity: match[1].toLowerCase(),
+                file: match[2],
+                line: parseInt(match[3], 10),
+                message: match[4].trim(),
+              });
+            }
+          }
+          if (comments.length === 0 && result.trim()) {
+            // If no structured format, add as single comment
+            comments.push({ file: 'diff', line: 0, severity: 'info', message: result.trim().slice(0, 500) });
+          }
+          setReviewComments(comments);
+          setReviewing(false);
+          unlisten();
+          unlistenDone();
+        }
+      });
+      await invoke('llm_chat', {
+        responseId: reviewId,
+        messages: [{ role: 'user', content: `Review this git diff for bugs, security issues, and code quality problems. For each issue, format as: [severity] file:line - description\n\nDiff:\n${diff.slice(0, 6000)}` }],
+        context: '',
+        providerName,
+      });
+    } catch (err) {
+      console.error('AI Review failed:', err);
+      setReviewing(false);
+    }
+  }, [projectPath, reviewing, selectedProvider, setReviewComments]);
+
+  const handleBlame = useCallback(() => {
+    const store = useAppStore.getState();
+    if (store.activeFile) {
+      store.setBlameFilePath(store.activeFile);
+      store.setShowBlameView(true);
+    }
+  }, []);
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
@@ -192,10 +258,39 @@ export default function GitPanel() {
           <span style={styles.branchName}>{currentBranch || 'main'}</span>
         </div>
         <button
+          style={{
+            ...styles.refreshButton,
+            marginLeft: 0,
+            color: reviewing ? 'var(--accent-purple)' : 'var(--text-secondary)',
+          }}
+          onClick={handleAIReview}
+          title="AI Code Review"
+          disabled={reviewing}
+          onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'var(--bg-hover)'; }}
+          onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none'; }}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style={reviewing ? { animation: 'spin 0.6s linear infinite' } : {}}>
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93z" />
+          </svg>
+        </button>
+        {useAppStore.getState().activeFile && (
+          <button
+            style={{ ...styles.refreshButton, marginLeft: 0 }}
+            onClick={handleBlame}
+            title="Blame Current File"
+            onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'var(--bg-hover)'; }}
+            onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none'; }}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 13A6 6 0 118 2a6 6 0 010 12zm-.5-9.5v4h1v-4h-1zm0 5v1h1v-1h-1z" />
+            </svg>
+          </button>
+        )}
+        <button
           style={styles.refreshButton}
           onClick={refreshStatus}
           title="Refresh"
-          onMouseEnter={(e) => { (e.target as HTMLElement).style.background = '#2a2d2e'; }}
+          onMouseEnter={(e) => { (e.target as HTMLElement).style.background = 'var(--bg-hover)'; }}
           onMouseLeave={(e) => { (e.target as HTMLElement).style.background = 'none'; }}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style={loading ? { animation: 'spin 0.6s linear infinite' } : {}}>
@@ -212,10 +307,10 @@ export default function GitPanel() {
           }}
           onClick={() => setActiveTab('changes')}
           onMouseEnter={(e) => {
-            if (activeTab !== 'changes') (e.target as HTMLElement).style.color = '#cccccc';
+            if (activeTab !== 'changes') (e.target as HTMLElement).style.color = 'var(--text-primary)';
           }}
           onMouseLeave={(e) => {
-            if (activeTab !== 'changes') (e.target as HTMLElement).style.color = '#969696';
+            if (activeTab !== 'changes') (e.target as HTMLElement).style.color = 'var(--text-secondary)';
           }}
         >
           Changes
@@ -230,10 +325,10 @@ export default function GitPanel() {
           }}
           onClick={() => setActiveTab('history')}
           onMouseEnter={(e) => {
-            if (activeTab !== 'history') (e.target as HTMLElement).style.color = '#cccccc';
+            if (activeTab !== 'history') (e.target as HTMLElement).style.color = 'var(--text-primary)';
           }}
           onMouseLeave={(e) => {
-            if (activeTab !== 'history') (e.target as HTMLElement).style.color = '#969696';
+            if (activeTab !== 'history') (e.target as HTMLElement).style.color = 'var(--text-secondary)';
           }}
         >
           History
@@ -249,6 +344,27 @@ export default function GitPanel() {
         )}
         {activeTab === 'history' && <HistoryView />}
       </div>
+      {/* AI Review Results (Feature 15) */}
+      {reviewComments.length > 0 && (
+        <div style={{ borderTop: '1px solid var(--border-color)', maxHeight: 200, overflow: 'auto' }}>
+          <div style={{ padding: '4px 12px', fontSize: 11, fontWeight: 600, color: 'var(--accent-purple)', background: 'rgba(197,134,192,0.1)' }}>
+            AI Review ({reviewComments.length} issues)
+            <span
+              style={{ marginLeft: 8, cursor: 'pointer', color: 'var(--text-muted)' }}
+              onClick={() => setReviewComments([])}
+            >Clear</span>
+          </div>
+          {reviewComments.map((c, i) => (
+            <div key={i} className="review-comment">
+              <span className={`review-severity ${c.severity}`}>
+                {c.severity === 'error' || c.severity === 'critical' ? '!' : c.severity === 'warning' || c.severity === 'suggestion' ? '?' : 'i'}
+              </span>
+              <span className="review-location">{c.file}:{c.line}</span>
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>{c.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

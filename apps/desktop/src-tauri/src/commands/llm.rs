@@ -58,6 +58,7 @@ pub async fn llm_chat(
     messages: Vec<ChatMessage>,
     context: String,
     provider_name: Option<String>,
+    images: Option<Vec<String>>,
     app: AppHandle,
     state: tauri::State<'_, LLMManager>,
 ) -> Result<(), String> {
@@ -90,14 +91,25 @@ pub async fn llm_chat(
         }
     };
 
+    // Build image context if present
+    let image_context = if let Some(ref imgs) = images {
+        if !imgs.is_empty() {
+            format!("\n\n[{} image(s) attached by user - vision content included in message]", imgs.len())
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
     let opts = ChatOptions {
         temperature: 0.7,
         max_tokens: 4096,
         stream: true,
         system: Some(format!(
             "You are LocalCode AI, a helpful coding assistant. \
-             Be concise and practical.\n\n{}",
-            context
+             Be concise and practical.\n\n{}{}",
+            context, image_context
         )),
         ..Default::default()
     };

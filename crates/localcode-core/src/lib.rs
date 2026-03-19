@@ -10,6 +10,7 @@ pub mod mcp;
 pub mod plugin;
 pub mod debug;
 pub mod python;
+pub mod lsp;
 
 use thiserror::Error;
 
@@ -35,6 +36,9 @@ pub enum CoreError {
 
     #[error("Config error: {0}")]
     Config(String),
+
+    #[error("Tool error: {0}")]
+    ToolError(String),
 
     #[error("{0}")]
     Other(String),

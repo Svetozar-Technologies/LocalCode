@@ -1,7 +1,8 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import type { FileEntry } from '../../types';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 const EXT_COLORS: Record<string, string> = {
   ts: '#3178c6', tsx: '#3178c6', js: '#f7df1e', jsx: '#f7df1e',
@@ -115,6 +116,25 @@ function FileTreeItem({ entry, depth }: FileTreeItemProps) {
 
 export default function FileExplorer() {
   const { fileTree, projectPath } = useAppStore();
+
+  // Listen for external file changes and refresh tree
+  useEffect(() => {
+    if (!projectPath) return;
+    const unlisten = listen<{ path: string; kind: string }>('file-changed', async (event) => {
+      const kind = event.payload.kind;
+      if (kind === 'create' || kind === 'remove' || kind === 'rename') {
+        try {
+          const tree = await invoke<FileEntry[]>('read_dir', { path: projectPath });
+          useAppStore.getState().setFileTree(tree);
+        } catch {
+          // ignore
+        }
+      }
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [projectPath]);
 
   if (!projectPath) {
     return (

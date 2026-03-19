@@ -145,6 +145,12 @@ impl MemoryManager {
         std::fs::read_to_string(path).ok()
     }
 
+    /// Read .localcode/rules.md from project root
+    pub fn read_rules_file(project_path: &str) -> Option<String> {
+        let path = Path::new(project_path).join(".localcode").join("rules.md");
+        std::fs::read_to_string(path).ok()
+    }
+
     /// Auto-discover project characteristics by examining files
     pub fn auto_discover_project(&mut self, project_path: &str) {
         let path = Path::new(project_path);
@@ -289,6 +295,13 @@ impl MemoryManager {
         if let Some(content) = Self::read_project_file(project_path) {
             ctx.push_str("# Project Instructions (LOCALCODE.md)\n");
             ctx.push_str(&content);
+            ctx.push('\n');
+        }
+
+        // Project rules (.localcode/rules.md)
+        if let Some(rules) = Self::read_rules_file(project_path) {
+            ctx.push_str("\n# Project Rules\n");
+            ctx.push_str(&rules);
             ctx.push('\n');
         }
 

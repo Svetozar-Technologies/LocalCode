@@ -4,6 +4,7 @@ pub mod search_tools;
 pub mod command_tools;
 pub mod memory_tools;
 pub mod subagent_tools;
+pub mod web_tools;
 
 use std::sync::Arc;
 use crate::agent::tools::ToolRegistry;
@@ -41,4 +42,17 @@ pub fn register_all(registry: &mut ToolRegistry) {
     // Memory tools
     registry.register(Arc::new(memory_tools::CodebaseSearchTool));
     registry.register(Arc::new(memory_tools::UpdateMemoryTool));
+
+    // Web tools
+    registry.register(Arc::new(web_tools::WebSearchTool));
+}
+
+/// Register only essential tools for local models (saves context tokens)
+pub fn register_essential(registry: &mut ToolRegistry) {
+    registry.register(Arc::new(file_tools::ReadFileTool));
+    registry.register(Arc::new(file_tools::WriteFileTool));
+    registry.register(Arc::new(file_tools::EditFileTool));
+    registry.register(Arc::new(file_tools::ListDirTool));
+    registry.register(Arc::new(command_tools::RunCommandTool));
+    registry.register(Arc::new(search_tools::SearchContentTool));
 }

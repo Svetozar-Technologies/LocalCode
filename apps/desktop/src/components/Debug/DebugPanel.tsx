@@ -27,7 +27,7 @@ const styles = {
     flexDirection: 'column' as const,
     height: '100%',
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     fontSize: 13,
   } as React.CSSProperties,
   toolbar: {
@@ -35,13 +35,13 @@ const styles = {
     alignItems: 'center',
     padding: '6px 12px',
     gap: 4,
-    borderBottom: '1px solid #3c3c3c',
-    background: '#252526',
+    borderBottom: '1px solid var(--border-color)',
+    background: 'var(--bg-secondary)',
   } as React.CSSProperties,
   toolbarButton: {
     background: 'none',
     border: 'none',
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     cursor: 'pointer',
     padding: '4px 6px',
     borderRadius: 3,
@@ -67,7 +67,7 @@ const styles = {
     overflow: 'auto',
   } as React.CSSProperties,
   section: {
-    borderBottom: '1px solid #3c3c3c',
+    borderBottom: '1px solid var(--border-color)',
   } as React.CSSProperties,
   sectionHeader: {
     display: 'flex',
@@ -76,7 +76,7 @@ const styles = {
     fontSize: 11,
     fontWeight: 700,
     textTransform: 'uppercase' as const,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     userSelect: 'none' as const,
     gap: 6,
@@ -91,10 +91,10 @@ const styles = {
     padding: '12px',
   } as React.CSSProperties,
   input: {
-    background: '#3c3c3c',
-    border: '1px solid #3c3c3c',
+    background: 'var(--border-color)',
+    border: '1px solid var(--border-color)',
     borderRadius: 3,
-    color: '#cccccc',
+    color: 'var(--text-primary)',
     padding: '5px 8px',
     fontSize: 12,
     outline: 'none',
@@ -102,12 +102,12 @@ const styles = {
   } as React.CSSProperties,
   label: {
     fontSize: 11,
-    color: '#969696',
+    color: 'var(--text-secondary)',
     marginBottom: 2,
   } as React.CSSProperties,
   startButton: {
     background: '#4ec9b0',
-    color: '#1e1e1e',
+    color: 'var(--bg-primary)',
     border: 'none',
     borderRadius: 3,
     padding: '6px 16px',
@@ -126,7 +126,7 @@ const styles = {
     lineHeight: 1.6,
     maxHeight: 200,
     overflow: 'auto',
-    background: '#1e1e1e',
+    background: 'var(--bg-primary)',
   } as React.CSSProperties,
   empty: {
     display: 'flex',
@@ -134,7 +134,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 40,
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     fontSize: 13,
     gap: 12,
     textAlign: 'center' as const,
@@ -238,7 +238,7 @@ export default function DebugPanel() {
   const isRunning = state === 'running' || state === 'stopped';
 
   const statusColors: Record<DebugState, string> = {
-    idle: '#6a6a6a',
+    idle: 'var(--text-muted)',
     initializing: '#dcdcaa',
     running: '#4ec9b0',
     stopped: '#ce9178',
@@ -253,7 +253,7 @@ export default function DebugPanel() {
             style={{
               ...styles.statusBadge,
               color: statusColors.idle,
-              background: '#2a2d2e',
+              background: 'var(--bg-hover)',
             }}
           >
             Not started
@@ -283,7 +283,7 @@ export default function DebugPanel() {
                 (e.target as HTMLInputElement).style.borderColor = '#007acc';
               }}
               onBlur={(e) => {
-                (e.target as HTMLInputElement).style.borderColor = '#3c3c3c';
+                (e.target as HTMLInputElement).style.borderColor = 'var(--border-color)';
               }}
             />
           </div>
@@ -402,7 +402,7 @@ export default function DebugPanel() {
           style={{
             ...styles.statusBadge,
             color: statusColors[state],
-            background: '#2a2d2e',
+            background: 'var(--bg-hover)',
           }}
         >
           {state === 'running' ? 'Running' : state === 'stopped' ? 'Paused' : 'Initializing'}
@@ -451,7 +451,7 @@ export default function DebugPanel() {
           {expandedSections.output && (
             <div style={styles.outputArea}>
               {output.length === 0 ? (
-                <span style={{ color: '#6a6a6a' }}>No output yet</span>
+                <span style={{ color: 'var(--text-muted)' }}>No output yet</span>
               ) : (
                 output.map((line, i) => (
                   <div
@@ -461,7 +461,7 @@ export default function DebugPanel() {
                         ? '#f44747'
                         : line.startsWith('[Debug]')
                         ? '#569cd6'
-                        : '#cccccc',
+                        : 'var(--text-primary)',
                     }}
                   >
                     {line}

@@ -11,8 +11,46 @@ pub fn git_branch(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn git_log(path: String, count: usize) -> Result<Vec<git::GitLogEntry>, String> {
-    git::git_log(&path, count).map_err(|e| e.to_string())
+pub fn git_log(path: String, count: usize, file_path: Option<String>) -> Result<Vec<git::GitLogEntry>, String> {
+    let entries = git::git_log(&path, count).map_err(|e| e.to_string())?;
+    if let Some(ref fp) = file_path {
+        // Filter by running git log -- <file> via command
+        Ok(filter_commits_by_file(&path, entries, fp))
+    } else {
+        Ok(entries)
+    }
+}
+
+#[tauri::command]
+pub fn git_file_log(path: String, file_path: String, count: usize) -> Result<Vec<git::GitLogEntry>, String> {
+    let entries = git::git_log(&path, count).map_err(|e| e.to_string())?;
+    Ok(filter_commits_by_file(&path, entries, &file_path))
+}
+
+/// Filter git log entries to only those that touched a specific file.
+/// Uses `git log --format=%H -- <file>` to get the list of relevant commit hashes.
+fn filter_commits_by_file(repo_path: &str, entries: Vec<git::GitLogEntry>, file_path: &str) -> Vec<git::GitLogEntry> {
+    // Try to get a relative path
+    let rel_path = if file_path.starts_with(repo_path) {
+        file_path.strip_prefix(repo_path).unwrap_or(file_path).trim_start_matches('/')
+    } else {
+        file_path
+    };
+
+    // Run git log to get hashes of commits that touched this file
+    let output = std::process::Command::new("git")
+        .args(["log", "--format=%H", "--follow", "--", rel_path])
+        .current_dir(repo_path)
+        .output();
+
+    match output {
+        Ok(out) if out.status.success() => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let relevant_hashes: std::collections::HashSet<&str> = stdout.lines().collect();
+            entries.into_iter().filter(|e| relevant_hashes.contains(e.hash.as_str())).collect()
+        }
+        _ => entries, // Fallback: return all
+    }
 }
 
 #[tauri::command]

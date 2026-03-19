@@ -43,6 +43,9 @@ async function openFileInEditor(absPath: string) {
   } catch { /* file may not exist yet */ }
 }
 
+/** Track original file contents before agent writes (for diff review) */
+const pendingOriginals: Record<string, string> = {};
+
 function AgentStepView({ step }: { step: AgentStep }) {
   return (
     <div className="agent-step">
@@ -62,11 +65,21 @@ function AgentStepView({ step }: { step: AgentStep }) {
   );
 }
 
+const PROVIDER_OPTIONS = [
+  { value: 'local', label: 'Local Model' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'anthropic', label: 'Anthropic' },
+  { value: 'ollama', label: 'Ollama' },
+];
+
 export default function ChatPanel() {
   const {
     chatMessages, addChatMessage, updateChatMessage, clearChat,
     isAIStreaming, setAIStreaming, agentMode, toggleAgentMode,
     openFiles, activeFile, llmConnected, projectPath,
+    selectedProvider, setSelectedProvider,
+    agentPlanMode, setAgentPlanMode, agentPlan, setAgentPlan,
+    createCheckpoint, restoreCheckpoint, checkpoints,
   } = useAppStore();
 
   const [input, setInput] = useState('');
@@ -74,8 +87,13 @@ export default function ChatPanel() {
   const [mentionFilter, setMentionFilter] = useState('');
   const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
   const [mentionContext, setMentionContext] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [chatImages, setChatImages] = useState<string[]>([]);
+  const [slashCommands, setSlashCommands] = useState<string[]>([]);
+  const [showSlashPopup, setShowSlashPopup] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -123,6 +141,19 @@ export default function ChatPanel() {
         }
       }
 
+      // Capture original file content before agent writes (for diff review)
+      if (step.type === 'tool_call' && step.args) {
+        const tool = step.tool || '';
+        if (tool === 'write_file' || tool === 'edit_file') {
+          const filePath = (step.args as any).path;
+          if (filePath && !pendingOriginals[filePath]) {
+            invoke<string>('read_file', { path: filePath })
+              .then((content) => { pendingOriginals[filePath] = content; })
+              .catch(() => { pendingOriginals[filePath] = ''; });
+          }
+        }
+      }
+
       // Auto-refresh file tree and open files when agent writes/creates/edits files
       if (step.type === 'tool_result' && step.result && !step.result.startsWith('Error')) {
         const tool = step.tool || '';
@@ -131,15 +162,29 @@ export default function ChatPanel() {
           refreshFileTree();
 
           // Auto-open the file in editor (extract path from result)
+          let filePath: string | null = null;
           if (tool === 'write_file' || tool === 'edit_file') {
             const pathMatch = step.result.match(/(?:wrote to|edited) (.+)$/i);
-            if (pathMatch) {
-              openFileInEditor(pathMatch[1]);
-            }
+            if (pathMatch) filePath = pathMatch[1];
           } else if (tool === 'create_file') {
             const pathMatch = step.result.match(/^Created (.+)$/i);
-            if (pathMatch) {
-              openFileInEditor(pathMatch[1]);
+            if (pathMatch) filePath = pathMatch[1];
+          }
+
+          if (filePath) {
+            openFileInEditor(filePath);
+
+            // Store pending agent change for diff review
+            if (tool === 'write_file' || tool === 'edit_file') {
+              const original = pendingOriginals[filePath] || '';
+              invoke<string>('read_file', { path: filePath })
+                .then((modified) => {
+                  if (original !== modified) {
+                    useAppStore.getState().addPendingAgentChange(filePath!, original, modified);
+                  }
+                })
+                .catch(() => {});
+              delete pendingOriginals[filePath];
             }
           }
         }
@@ -160,7 +205,6 @@ export default function ChatPanel() {
 
     switch (option.id) {
       case 'file': {
-        // Inject active file content
         const af = store.activeFile;
         const fileData = af ? store.openFiles.find((f) => f.path === af) : null;
         if (fileData) {
@@ -169,7 +213,6 @@ export default function ChatPanel() {
         break;
       }
       case 'codebase': {
-        // Inject project file tree summary
         if (store.projectPath) {
           try {
             const tree = await invoke<FileEntry[]>('read_dir', { path: store.projectPath });
@@ -206,13 +249,16 @@ export default function ChatPanel() {
         contextStr = sel ? `[Editor Selection]\n\`\`\`\n${sel.slice(0, 4000)}\n\`\`\`` : '[No text selected in editor]';
         break;
       }
+      case 'web': {
+        contextStr = '[Web Search: will search the web for relevant results]';
+        break;
+      }
       case 'docs':
         contextStr = '[Docs: documentation context not yet available]';
         break;
     }
 
     setMentionContext((prev) => prev ? `${prev}\n\n${contextStr}` : contextStr);
-    // Remove the @... from input
     const atIndex = input.lastIndexOf('@');
     if (atIndex >= 0) {
       setInput(input.slice(0, atIndex) + `${option.prefix} `);
@@ -223,6 +269,26 @@ export default function ChatPanel() {
     const trimmed = input.trim();
     if (!trimmed || isAIStreaming) return;
 
+    // Handle slash commands (Feature 10)
+    if (trimmed.startsWith('/') && projectPath) {
+      const cmdName = trimmed.slice(1).split(' ')[0];
+      const cmdPath = `${projectPath}/.localcode/commands/${cmdName}.md`;
+      try {
+        const cmdContent = await invoke<string>('read_file', { path: cmdPath });
+        setMentionContext((prev) => prev ? `${prev}\n\n[Slash Command: /${cmdName}]\n${cmdContent}` : `[Slash Command: /${cmdName}]\n${cmdContent}`);
+        const restOfMessage = trimmed.slice(cmdName.length + 1).trim();
+        if (restOfMessage) {
+          setInput(restOfMessage);
+        } else {
+          setInput('');
+        }
+        // Don't send yet — let user add more context
+        return;
+      } catch {
+        // Not a valid slash command, proceed normally
+      }
+    }
+
     const userMsg = {
       id: `user-${Date.now()}`,
       role: 'user' as const,
@@ -231,6 +297,7 @@ export default function ChatPanel() {
     };
     addChatMessage(userMsg);
     setInput('');
+    setChatImages([]);
 
     const assistantId = `assistant-${Date.now()}`;
     addChatMessage({
@@ -243,23 +310,74 @@ export default function ChatPanel() {
 
     setAIStreaming(true);
 
-    // Build context — combine mention context + current file
+    // Build context
     const currentFileContent = activeFile
       ? openFiles.find((f) => f.path === activeFile)?.content || ''
       : '';
 
+    let codebaseContext = '';
+    if (projectPath) {
+      try {
+        const chunks = await invoke<string[]>('search_codebase', {
+          projectPath,
+          query: trimmed,
+          topK: 5,
+        });
+        if (chunks && chunks.length > 0) {
+          codebaseContext = `## Relevant Code Context\n${chunks.join('\n\n')}`;
+        }
+      } catch {
+        // Silent skip
+      }
+    }
+
+    const imageContext = chatImages.length > 0
+      ? `\n\n[${chatImages.length} image(s) attached]`
+      : '';
+
     const fullContext = [
+      codebaseContext,
       mentionContext,
       currentFileContent
         ? `Current file (${activeFile}):\n\`\`\`\n${currentFileContent.slice(0, 4000)}\n\`\`\``
         : '',
+      imageContext,
     ].filter(Boolean).join('\n\n');
 
-    // Clear mention context after sending
     setMentionContext('');
+
+    const providerName = selectedProvider !== 'local' ? selectedProvider : undefined;
 
     try {
       if (agentMode) {
+        // Feature 11: Create checkpoint before agent execution
+        createCheckpoint();
+
+        // Feature 7: Agent Plan Mode
+        // If a plan already exists and the user is asking to execute, run the agent directly
+        const isExecuteRequest = agentPlan && /^(execute|run|do it|go ahead|yes|proceed|ok|execute it|start)/i.test(trimmed);
+
+        if (agentPlanMode && !isExecuteRequest) {
+          // Generate a plan first via llm_chat
+          // Reuse the assistantId for the plan so the Execute/Cancel buttons show on it
+          await invoke('llm_chat', {
+            responseId: assistantId,
+            messages: [{ role: 'user', content: trimmed }],
+            context: `You are a planning assistant. Create a step-by-step plan for this task. Do NOT execute anything. Just list the numbered steps.\n\n${fullContext}`,
+            providerName,
+          });
+
+          // The plan will be streamed via llm-chat-chunk events
+          // Set the plan in store so the UI can show Execute/Cancel buttons
+          setAgentPlan(assistantId);
+          return;
+        }
+
+        // If user typed execute request, clear the plan and proceed with agent_execute
+        if (isExecuteRequest) {
+          setAgentPlan(null);
+        }
+
         const history = chatMessages
           .filter((m) => m.content.trim())
           .map((m) => ({
@@ -267,13 +385,22 @@ export default function ChatPanel() {
             content: m.content.slice(0, 2000),
           }));
 
+        // Find the original task (last substantial user message before "execute it")
+        const isLocal = selectedProvider === 'local' || !selectedProvider;
+        const taskMessage = isExecuteRequest
+          ? chatMessages.filter((m) => m.role === 'user' && m.content.trim().length > 20).pop()?.content || trimmed
+          : isLocal
+            ? trimmed  // Local models: just the raw task to save tokens
+            : (fullContext ? `${trimmed}\n\nContext:\n${fullContext}` : trimmed);
+
         await invoke('agent_execute', {
           responseId: assistantId,
-          task: fullContext ? `${trimmed}\n\nContext:\n${fullContext}` : trimmed,
+          task: taskMessage,
           projectPath: projectPath || '',
           currentFile: activeFile || '',
-          currentFileContent,
-          chatHistory: history,
+          currentFileContent: isLocal ? '' : currentFileContent,  // Skip for local models
+          chatHistory: isLocal ? [] : history,  // Skip for local models
+          providerName,
         });
       } else {
         await invoke('llm_chat', {
@@ -286,6 +413,8 @@ export default function ChatPanel() {
             { role: 'user', content: trimmed },
           ],
           context: fullContext,
+          providerName,
+          images: chatImages.length > 0 ? chatImages : undefined,
         });
       }
     } catch (err) {
@@ -294,21 +423,142 @@ export default function ChatPanel() {
       });
       setAIStreaming(false);
     }
-  }, [input, isAIStreaming, agentMode, chatMessages, activeFile, openFiles, projectPath, addChatMessage, updateChatMessage, setAIStreaming, mentionContext]);
+  }, [input, isAIStreaming, agentMode, agentPlanMode, agentPlan, chatMessages, activeFile, openFiles, projectPath, addChatMessage, updateChatMessage, setAIStreaming, mentionContext, selectedProvider, chatImages, createCheckpoint, setAgentPlan]);
+
+  // Execute plan (Feature 7)
+  const executePlan = useCallback(async () => {
+    if (!agentPlan) return;
+    setAgentPlan(null);
+
+    const assistantId = `agent-${Date.now()}`;
+    addChatMessage({
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      agentSteps: [],
+    });
+
+    setAIStreaming(true);
+
+    const lastUserMsg = chatMessages.filter((m) => m.role === 'user').pop();
+    const providerName = selectedProvider !== 'local' ? selectedProvider : undefined;
+    const currentFileContent = activeFile
+      ? openFiles.find((f) => f.path === activeFile)?.content || ''
+      : '';
+
+    try {
+      const history = chatMessages
+        .filter((m) => m.content.trim())
+        .map((m) => ({ role: m.role, content: m.content.slice(0, 2000) }));
+
+      await invoke('agent_execute', {
+        responseId: assistantId,
+        task: lastUserMsg?.content || '',
+        projectPath: projectPath || '',
+        currentFile: activeFile || '',
+        currentFileContent,
+        chatHistory: history,
+        providerName,
+      });
+    } catch (err) {
+      updateChatMessage(assistantId, {
+        content: `Error: ${err}`,
+      });
+      setAIStreaming(false);
+    }
+  }, [agentPlan, chatMessages, selectedProvider, activeFile, openFiles, projectPath, addChatMessage, updateChatMessage, setAIStreaming, setAgentPlan]);
+
+  // Voice input (Feature 18)
+  const toggleVoiceInput = useCallback(() => {
+    if (isRecording) {
+      recognitionRef.current?.stop();
+      setIsRecording(false);
+      return;
+    }
+
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn('Speech recognition not supported');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event: any) => {
+      let transcript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      if (event.results[event.results.length - 1].isFinal) {
+        setInput((prev) => prev + transcript + ' ');
+      }
+    };
+
+    recognition.onerror = () => setIsRecording(false);
+    recognition.onend = () => setIsRecording(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsRecording(true);
+  }, [isRecording]);
+
+  // Image paste/drop (Feature 14)
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        e.preventDefault();
+        const file = items[i].getAsFile();
+        if (!file) continue;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result as string;
+          setChatImages((prev) => [...prev, base64]);
+        };
+        reader.readAsDataURL(file);
+        break;
+      }
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    for (let i = 0; i < files.length; i++) {
+      if (files[i].type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result as string;
+          setChatImages((prev) => [...prev, base64]);
+        };
+        reader.readAsDataURL(files[i]);
+      }
+    }
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setInput(val);
 
+    // Detect / at start for slash commands (Feature 10)
+    if (val.startsWith('/') && projectPath) {
+      const filter = val.slice(1).split(' ')[0];
+      loadSlashCommands(filter);
+      return;
+    }
+    setShowSlashPopup(false);
+
     // Detect @ for mention popup
     const atIndex = val.lastIndexOf('@');
     if (atIndex >= 0 && (atIndex === 0 || val[atIndex - 1] === ' ' || val[atIndex - 1] === '\n')) {
       const afterAt = val.slice(atIndex + 1);
-      // Only show if no space after the filter text (still typing mention)
       if (!afterAt.includes(' ')) {
         setMentionFilter(afterAt);
         setMentionVisible(true);
-        // Position above textarea
         const rect = textareaRef.current?.getBoundingClientRect();
         if (rect) {
           setMentionPosition({ top: -250, left: 0 });
@@ -319,21 +569,63 @@ export default function ChatPanel() {
     setMentionVisible(false);
   };
 
+  const loadSlashCommands = useCallback(async (filter: string) => {
+    if (!projectPath) return;
+    try {
+      const results = await invoke<{ path: string; name: string }[]>('search_files', {
+        path: `${projectPath}/.localcode/commands`,
+        query: '',
+      });
+      const cmds = results
+        .filter((r) => r.name.endsWith('.md'))
+        .map((r) => r.name.replace('.md', ''))
+        .filter((name) => name.startsWith(filter));
+      setSlashCommands(cmds);
+      setShowSlashPopup(cmds.length > 0);
+    } catch {
+      setShowSlashPopup(false);
+    }
+  }, [projectPath]);
+
+  const selectSlashCommand = useCallback((cmd: string) => {
+    setInput(`/${cmd} `);
+    setShowSlashPopup(false);
+    textareaRef.current?.focus();
+  }, []);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (mentionVisible) return; // Let MentionPopup handle keys
+    if (mentionVisible || showSlashPopup) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
     }
   };
 
+  // Restore checkpoint handler
+  const handleRestore = useCallback((cpId: string) => {
+    restoreCheckpoint(cpId);
+    // Also write restored files back to disk
+    const cp = checkpoints.find((c) => c.id === cpId);
+    if (cp) {
+      Object.entries(cp.files).forEach(([path, content]) => {
+        invoke('write_file', { path, content }).catch(() => {});
+      });
+    }
+  }, [restoreCheckpoint, checkpoints]);
+
   return (
     <div className="chat-panel">
       <div className="model-selector">
         <span className={`model-dot ${llmConnected ? 'connected' : 'disconnected'}`} />
-        <span style={{ color: 'var(--text-secondary)' }}>
-          {llmConnected ? 'Model connected' : 'No model loaded'}
-        </span>
+        <select
+          value={selectedProvider}
+          onChange={(e) => setSelectedProvider(e.target.value)}
+          title="Select AI Provider"
+        >
+          {PROVIDER_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
         <button
           className="action-btn"
           style={{ marginLeft: 'auto' }}
@@ -364,6 +656,16 @@ export default function ChatPanel() {
           Agent Mode
           {agentMode && <span className="badge">ON</span>}
         </label>
+        {agentMode && (
+          <label style={{ marginLeft: 8 }}>
+            <input
+              type="checkbox"
+              checked={agentPlanMode}
+              onChange={(e) => setAgentPlanMode(e.target.checked)}
+            />
+            Plan First
+          </label>
+        )}
         <span style={{ marginLeft: 'auto', cursor: 'pointer', color: 'var(--text-muted)' }} onClick={clearChat}>
           Clear
         </span>
@@ -385,12 +687,73 @@ export default function ChatPanel() {
               ))}
               {msg.content || (isAIStreaming && msg.role === 'assistant' ? '...' : '')}
             </div>
+            {/* Plan mode buttons (Feature 7) */}
+            {agentPlan === msg.id && !isAIStreaming && msg.content && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button
+                  onClick={executePlan}
+                  style={{
+                    background: 'var(--accent-green)',
+                    border: 'none',
+                    borderRadius: 4,
+                    color: '#1e1e1e',
+                    padding: '4px 12px',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  Execute Plan
+                </button>
+                <button
+                  onClick={() => setAgentPlan(null)}
+                  style={{
+                    background: 'none',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 4,
+                    color: 'var(--text-secondary)',
+                    padding: '4px 12px',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
           </div>
         ))}
+        {/* Checkpoint restore button (Feature 11) */}
+        {checkpoints.length > 0 && !isAIStreaming && (
+          <div style={{ padding: '4px 0' }}>
+            {checkpoints.slice(0, 1).map((cp) => (
+              <button
+                key={cp.id}
+                onClick={() => handleRestore(cp.id)}
+                style={{
+                  background: 'none',
+                  border: '1px solid var(--accent-orange)',
+                  borderRadius: 4,
+                  color: 'var(--accent-orange)',
+                  padding: '3px 10px',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                }}
+              >
+                Restore to checkpoint ({new Date(cp.timestamp).toLocaleTimeString()})
+              </button>
+            ))}
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="chat-input-area" style={{ position: 'relative' }}>
+      <div
+        className="chat-input-area"
+        style={{ position: 'relative', flexDirection: 'column' }}
+        onDrop={handleDrop}
+        onDragOver={(e) => e.preventDefault()}
+      >
         <MentionPopup
           visible={mentionVisible}
           filter={mentionFilter}
@@ -398,23 +761,97 @@ export default function ChatPanel() {
           onSelect={handleMentionSelect}
           onClose={() => setMentionVisible(false)}
         />
+        {/* Slash command popup (Feature 10) */}
+        {showSlashPopup && slashCommands.length > 0 && (
+          <div style={{
+            position: 'absolute',
+            bottom: '100%',
+            left: 0,
+            right: 0,
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            borderRadius: 4,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            maxHeight: 200,
+            overflow: 'auto',
+            zIndex: 20,
+          }}>
+            {slashCommands.map((cmd) => (
+              <div
+                key={cmd}
+                onClick={() => selectSlashCommand(cmd)}
+                style={{ padding: '6px 12px', cursor: 'pointer', fontSize: 12, color: 'var(--text-primary)' }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+              >
+                <span style={{ color: 'var(--accent)' }}>/{cmd}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {mentionContext && (
           <div style={{ padding: '4px 8px', fontSize: 10, color: '#4ec9b0', background: 'rgba(78,201,176,0.1)', borderRadius: 3, marginBottom: 4 }}>
             Context attached (type @ to add more)
           </div>
         )}
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          placeholder={agentMode ? 'Describe a task... (Agent will execute it) — type @ for context' : 'Ask about your code... — type @ for context'}
-          rows={1}
-          disabled={isAIStreaming}
-        />
-        <button onClick={sendMessage} disabled={isAIStreaming || !input.trim()}>
-          {isAIStreaming ? '...' : 'Send'}
-        </button>
+        {/* Image thumbnails (Feature 14) */}
+        {chatImages.length > 0 && (
+          <div style={{ display: 'flex', gap: 4, padding: '4px 0', flexWrap: 'wrap' }}>
+            {chatImages.map((img, i) => (
+              <div key={i} style={{ position: 'relative' }}>
+                <img src={img} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4, border: '1px solid var(--border-color)' }} />
+                <span
+                  onClick={() => setChatImages((prev) => prev.filter((_, idx) => idx !== i))}
+                  style={{
+                    position: 'absolute', top: -4, right: -4,
+                    width: 14, height: 14, borderRadius: '50%',
+                    background: 'var(--accent-red)', color: '#fff',
+                    fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >x</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder={agentMode ? 'Describe a task... — type @ for context, / for commands' : 'Ask about your code... — type @ for context'}
+            rows={1}
+            disabled={isAIStreaming}
+          />
+          {/* Voice input button (Feature 18) */}
+          <button
+            onClick={toggleVoiceInput}
+            title={isRecording ? 'Stop Recording' : 'Voice Input'}
+            style={{
+              background: isRecording ? 'var(--accent-red)' : 'none',
+              border: `1px solid ${isRecording ? 'var(--accent-red)' : 'var(--border-color)'}`,
+              borderRadius: 4,
+              color: isRecording ? '#fff' : 'var(--text-secondary)',
+              padding: '0 8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              alignSelf: 'flex-end',
+              height: 36,
+            }}
+          >
+            {isRecording && <span className="voice-recording" />}
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 11a3 3 0 003-3V3a3 3 0 00-6 0v5a3 3 0 003 3zm5-3a5 5 0 01-4.5 4.975V15h-1v-2.025A5 5 0 013 8h1a4 4 0 008 0h1z" />
+            </svg>
+          </button>
+          <button onClick={sendMessage} disabled={isAIStreaming || !input.trim()}>
+            {isAIStreaming ? '...' : 'Send'}
+          </button>
+        </div>
       </div>
     </div>
   );

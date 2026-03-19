@@ -64,7 +64,7 @@ impl LocalProvider {
             .arg("--port")
             .arg("8081")
             .arg("-c")
-            .arg("4096")
+            .arg("8192")
             .arg("-ngl")
             .arg("99")
             .arg("--chat-template")

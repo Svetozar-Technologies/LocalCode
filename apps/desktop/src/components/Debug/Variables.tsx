@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 interface VariableItem {
   name: string;
   value: string;
@@ -28,7 +26,7 @@ const styles = {
     flexShrink: 0,
   } as React.CSSProperties,
   separator: {
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
   } as React.CSSProperties,
   value: {
     color: '#ce9178',
@@ -43,7 +41,7 @@ const styles = {
     flexShrink: 0,
   } as React.CSSProperties,
   empty: {
-    color: '#6a6a6a',
+    color: 'var(--text-muted)',
     fontSize: 12,
     padding: '8px 0',
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -93,5 +91,5 @@ function getValueColor(value: string, type?: string): string {
   if (value === 'None' || value === 'null' || value === 'undefined') {
     return '#569cd6'; // Null — blue
   }
-  return '#cccccc'; // Default
+  return 'var(--text-primary)'; // Default
 }
