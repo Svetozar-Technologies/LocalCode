@@ -25,24 +25,24 @@ Built with [Tauri v2](https://tauri.app/) (Rust backend), [React](https://react.
 
 ## See It In Action
 
-### Self-Healing Agent — writes code, detects errors, fixes them, retries automatically
+### Self-Healing Agent — detects `NameError`, reads the file, fixes the bug, reruns successfully
 <p align="center">
   <img src="assets/screenshots/1-self-healing-agent.png" alt="Self-Healing Agent" width="680"/>
 </p>
 
-### Error Recovery — reads the traceback, patches the bug, reruns
+### Real Bitcoin Price Fetch — agent writes script, runs it, gets live data ($70,336)
 <p align="center">
-  <img src="assets/screenshots/3-error-recovery.png" alt="Auto Error Recovery" width="680"/>
+  <img src="assets/screenshots/4-bitcoin-fetch.png" alt="Bitcoin Price Fetch" width="680"/>
 </p>
 
-### Session Memory — every session stored permanently, searchable by keyword
+### Session Memory — all sessions stored permanently, searchable
 <p align="center">
-  <img src="assets/screenshots/2-session-memory.png" alt="Session Memory & Search" width="680"/>
+  <img src="assets/screenshots/2-session-memory.png" alt="Session Memory" width="680"/>
 </p>
 
-### Quick Start — clone, build, run in 2 minutes
+### All Commands
 <p align="center">
-  <img src="assets/screenshots/4-quick-start.png" alt="Quick Start" width="680"/>
+  <img src="assets/screenshots/3-help-commands.png" alt="Help Commands" width="680"/>
 </p>
 
 ---
