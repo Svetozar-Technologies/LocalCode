@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useAppStore } from '../../stores/appStore';
 import LLMSettings from './LLMSettings';
 
 type SettingsSection = 'general' | 'editor' | 'llm' | 'agent' | 'keybindings';
@@ -210,10 +211,10 @@ const KEYBINDINGS = [
 ];
 
 function GeneralSettings() {
+  const { theme, setTheme } = useAppStore();
   const [autoSave, setAutoSave] = useState(true);
   const [autoSaveDelay, setAutoSaveDelay] = useState(1000);
   const [telemetry, setTelemetry] = useState(false);
-  const [theme, setTheme] = useState('dark');
 
   return (
     <>

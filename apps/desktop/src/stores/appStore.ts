@@ -74,6 +74,10 @@ interface AppState {
   toggleChatPanel: () => void;
   chatPanelWidth: number;
   setChatPanelWidth: (width: number) => void;
+
+  // Theme
+  theme: string;
+  setTheme: (theme: string) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -204,6 +208,13 @@ export const useAppStore = create<AppState>((set) => ({
   toggleChatPanel: () => set((state) => ({ chatPanelVisible: !state.chatPanelVisible })),
   chatPanelWidth: 320,
   setChatPanelWidth: (width) => set({ chatPanelWidth: width }),
+
+  // Theme
+  theme: localStorage.getItem('localcode-theme') || 'dark',
+  setTheme: (theme) => {
+    localStorage.setItem('localcode-theme', theme);
+    set({ theme });
+  },
 }));
 
 function toggleDirRecursive(tree: FileEntry[], path: string): FileEntry[] {
