@@ -3,6 +3,7 @@ pub mod git_tools;
 pub mod search_tools;
 pub mod command_tools;
 pub mod memory_tools;
+pub mod subagent_tools;
 
 use std::sync::Arc;
 use crate::agent::tools::ToolRegistry;
@@ -31,6 +32,11 @@ pub fn register_all(registry: &mut ToolRegistry) {
 
     // Command tools
     registry.register(Arc::new(command_tools::RunCommandTool));
+    registry.register(Arc::new(command_tools::GrepTool));
+    registry.register(Arc::new(command_tools::FindTool));
+    registry.register(Arc::new(command_tools::CurlTool));
+    registry.register(Arc::new(command_tools::SedTool));
+    registry.register(Arc::new(command_tools::WcTool));
 
     // Memory tools
     registry.register(Arc::new(memory_tools::CodebaseSearchTool));

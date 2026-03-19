@@ -9,6 +9,8 @@ import StatusBar from './components/StatusBar/StatusBar';
 import GitPanel from './components/Git/GitPanel';
 import DebugPanel from './components/Debug/DebugPanel';
 import SettingsPanel from './components/Settings/SettingsPanel';
+import QuickOpen from './components/Editor/QuickOpen';
+import Composer from './components/Composer/Composer';
 import { useAppStore } from './stores/appStore';
 
 function Sidebar() {
@@ -50,6 +52,12 @@ function Sidebar() {
         <>
           <div className="sidebar-header">Settings</div>
           <SettingsPanel />
+        </>
+      )}
+      {sidebarView === 'composer' && (
+        <>
+          <div className="sidebar-header">Composer</div>
+          <Composer />
         </>
       )}
     </div>
@@ -133,7 +141,7 @@ function App() {
           e.preventDefault();
           toggleTerminal();
         }
-        if (e.key === 'i') {
+        if (e.key === 'i' && !e.shiftKey) {
           e.preventDefault();
           useAppStore.getState().toggleChatPanel();
         }
@@ -142,14 +150,35 @@ function App() {
           const store = useAppStore.getState();
           store.setSidebarWidth(store.sidebarWidth > 0 ? 0 : 260);
         }
+        if (e.key === 'p') {
+          e.preventDefault();
+          useAppStore.getState().toggleQuickOpen();
+        }
+        if (e.key === 'k') {
+          e.preventDefault();
+          useAppStore.getState().setInlineEditVisible(true);
+        }
+        // Cmd+Shift+I for Composer
+        if (e.key === 'i' && e.shiftKey) {
+          e.preventDefault();
+          const store = useAppStore.getState();
+          store.setSidebarView('composer');
+          if (store.sidebarWidth === 0) store.setSidebarWidth(260);
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleTerminal]);
 
+  const quickOpenVisible = useAppStore((s) => s.quickOpenVisible);
+
   return (
     <div className="app-container">
+      <QuickOpen
+        visible={quickOpenVisible}
+        onClose={() => useAppStore.getState().setQuickOpenVisible(false)}
+      />
       <div className="app-main">
         <ActivityBar />
         {sidebarWidth > 0 && (

@@ -4,12 +4,23 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::CoreError;
-use crate::llm::provider::ToolDefinition;
+use crate::llm::provider::{LLMProvider, ToolDefinition};
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ToolContext {
     pub project_path: String,
     pub current_file: Option<String>,
+    pub provider: Option<Arc<dyn LLMProvider>>,
+}
+
+impl std::fmt::Debug for ToolContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ToolContext")
+            .field("project_path", &self.project_path)
+            .field("current_file", &self.current_file)
+            .field("provider", &self.provider.as_ref().map(|p| p.name()))
+            .finish()
+    }
 }
 
 #[async_trait]

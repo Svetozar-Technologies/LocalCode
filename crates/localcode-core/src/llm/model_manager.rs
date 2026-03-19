@@ -411,3 +411,77 @@ fn now_secs() -> u64 {
         .unwrap_or_default()
         .as_secs()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_catalog_not_empty() {
+        let catalog = ModelManager::catalog();
+        assert!(!catalog.is_empty(), "Model catalog should not be empty");
+    }
+
+    #[test]
+    fn test_catalog_entries_valid() {
+        let catalog = ModelManager::catalog();
+        for entry in &catalog {
+            assert!(!entry.id.is_empty(), "Catalog entry id should not be empty");
+            assert!(!entry.name.is_empty(), "Catalog entry name should not be empty: {}", entry.id);
+            assert!(!entry.url.is_empty(), "Catalog entry url should not be empty: {}", entry.id);
+            assert!(!entry.filename.is_empty(), "Catalog entry filename should not be empty: {}", entry.id);
+            assert!(entry.size_bytes > 0, "Catalog entry size should be > 0: {}", entry.id);
+            assert!(entry.context_length > 0, "Catalog entry context_length should be > 0: {}", entry.id);
+            assert!(!entry.quantization.is_empty(), "Catalog entry quantization should not be empty: {}", entry.id);
+            assert!(!entry.parameters.is_empty(), "Catalog entry parameters should not be empty: {}", entry.id);
+            assert!(!entry.family.is_empty(), "Catalog entry family should not be empty: {}", entry.id);
+        }
+    }
+
+    #[test]
+    fn test_registry_save_load() {
+        let dir = TempDir::new().unwrap();
+        let registry_path = dir.path().join("registry.json");
+
+        let registry = ModelRegistry {
+            models: vec![
+                DownloadedModel {
+                    catalog_id: "test-model-q4".to_string(),
+                    path: "/tmp/test-model.gguf".to_string(),
+                    name: "Test Model".to_string(),
+                    size_bytes: 1_000_000,
+                    downloaded_at: 1700000000,
+                },
+                DownloadedModel {
+                    catalog_id: "another-model-q8".to_string(),
+                    path: "/tmp/another-model.gguf".to_string(),
+                    name: "Another Model".to_string(),
+                    size_bytes: 2_000_000,
+                    downloaded_at: 1700000001,
+                },
+            ],
+        };
+
+        // Save
+        let content = serde_json::to_string_pretty(&registry).unwrap();
+        std::fs::write(&registry_path, &content).unwrap();
+
+        // Load
+        let loaded = ModelManager::load_registry(&registry_path).unwrap();
+        assert_eq!(loaded.models.len(), 2);
+        assert_eq!(loaded.models[0].catalog_id, "test-model-q4");
+        assert_eq!(loaded.models[0].name, "Test Model");
+        assert_eq!(loaded.models[1].catalog_id, "another-model-q8");
+        assert_eq!(loaded.models[1].size_bytes, 2_000_000);
+    }
+
+    #[test]
+    fn test_registry_load_missing_file() {
+        let dir = TempDir::new().unwrap();
+        let registry_path = dir.path().join("nonexistent.json");
+
+        let loaded = ModelManager::load_registry(&registry_path).unwrap();
+        assert!(loaded.models.is_empty(), "Loading missing file should return empty registry");
+    }
+}

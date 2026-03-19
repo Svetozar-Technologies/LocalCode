@@ -1,7 +1,7 @@
 import { useAppStore } from '../../stores/appStore';
 
 export default function StatusBar() {
-  const { activeFile, openFiles, currentBranch, llmConnected, llmConfig, agentMode, problems, setBottomPanelTab } = useAppStore();
+  const { activeFile, openFiles, currentBranch, llmConnected, llmConfig, agentMode, problems, setBottomPanelTab, completionStatus } = useAppStore();
 
   const currentFile = openFiles.find((f) => f.path === activeFile);
   const ext = activeFile?.split('.').pop() || '';
@@ -59,6 +59,19 @@ export default function StatusBar() {
           </>
         )}
       </span>
+      {completionStatus === 'completing' && (
+        <span className="status-item" style={{ color: '#dcdcaa' }}>
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ animation: 'spin 1s linear infinite' }}>
+            <path d="M13.917 7A6.002 6.002 0 0 0 2.083 7H1.071a7.002 7.002 0 0 1 13.858 0h-1.012z" />
+          </svg>
+          AI completing...
+        </span>
+      )}
+      {completionStatus === 'idle' && llmConnected && (
+        <span className="status-item" style={{ color: '#4ec9b0' }}>
+          Copilot
+        </span>
+      )}
       {agentMode && (
         <span className="status-item" style={{ background: 'rgba(255,255,255,0.15)', padding: '0 6px', borderRadius: 3 }}>
           Agent Mode

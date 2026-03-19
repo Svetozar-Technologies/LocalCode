@@ -29,23 +29,32 @@ pub async fn run_agent(
             let model = config.get_anthropic_model();
             Arc::new(AnthropicProvider::new(&key, &model))
         }
+        "ollama" | "local" => {
+            let server_url = &config.providers.local.server_url;
+            let base_url = format!("{}/v1", server_url);
+            let model = config.providers.local.active_catalog_model
+                .clone()
+                .unwrap_or_else(|| "qwen2.5-coder:14b".to_string());
+            Arc::new(OpenAIProvider::with_base_url("ollama", &base_url, &model))
+        }
         _ => Arc::new(LocalProvider::new()),
     };
 
     let mut registry = ToolRegistry::new();
     builtin::register_all(&mut registry);
 
-    let mut engine = AgentEngine::new(provider, registry);
-
-    // Initialize memory, auto-discovery, and session
+    let mut engine = AgentEngine::new(provider.clone(), registry);
     engine.initialize(&cwd);
 
     let ctx = ToolContext {
         project_path: cwd,
         current_file: None,
+        provider: Some(provider),
     };
 
-    let result = engine
+    println!();
+
+    let _result = engine
         .execute(task, &ctx, &|event| match event {
             AgentEvent::Step(step) => {
                 if step.step_type == "tool_call" {
@@ -75,5 +84,6 @@ pub async fn run_agent(
         })
         .await?;
 
+    println!();
     Ok(())
 }

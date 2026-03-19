@@ -45,17 +45,18 @@ impl Tool for CodebaseSearchTool {
             .as_str()
             .ok_or_else(|| CoreError::Agent("Missing 'query' parameter".to_string()))?;
 
-        let top_k = args["top_k"].as_u64().unwrap_or(5) as usize;
+        let top_k = args["top_k"].as_u64().unwrap_or(8) as usize;
 
-        // Ensure index is fresh (build if needed)
-        let _ = crate::indexing::query::build_index(&ctx.project_path);
+        // Auto-index if needed (skip if index is <5 min old)
+        let _ = crate::indexing::query::index_if_needed(&ctx.project_path, 300);
 
         match crate::indexing::query::query_codebase(&ctx.project_path, query, top_k) {
             Ok(results) => {
                 if results.is_empty() {
                     Ok("No matching code found in the project.".to_string())
                 } else {
-                    Ok(results.join("\n\n"))
+                    let header = format!("Found {} results for '{}':\n\n", results.len(), query);
+                    Ok(format!("{}{}", header, results.join("\n\n---\n\n")))
                 }
             }
             Err(e) => Ok(format!("Search failed: {}. The project may need indexing first.", e)),

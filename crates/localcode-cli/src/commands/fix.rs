@@ -21,15 +21,23 @@ pub async fn run_fix(
     let provider: Arc<dyn LLMProvider> = match name {
         "openai" => Arc::new(OpenAIProvider::new(&config.get_openai_key(), &config.get_openai_model())),
         "anthropic" => Arc::new(AnthropicProvider::new(&config.get_anthropic_key(), &config.get_anthropic_model())),
+        "ollama" | "local" => {
+            let server_url = &config.providers.local.server_url;
+            let base_url = format!("{}/v1", server_url);
+            let model = config.providers.local.active_catalog_model
+                .clone()
+                .unwrap_or_else(|| "qwen2.5-coder:14b".to_string());
+            Arc::new(OpenAIProvider::with_base_url("ollama", &base_url, &model))
+        }
         _ => Arc::new(LocalProvider::new()),
     };
 
     let mut registry = ToolRegistry::new();
     builtin::register_all(&mut registry);
 
-    let mut engine = AgentEngine::new(provider, registry)
+    let mut engine = AgentEngine::new(provider.clone(), registry)
         .with_system_prompt(
-            "You are LocalCode Agent. Fix the error described by the user. \
+            "You are LocalCode, an AI coding assistant. Fix the error described by the user. \
              Read relevant files, identify the issue, and fix it."
                 .to_string(),
         );
@@ -37,6 +45,7 @@ pub async fn run_fix(
     let ctx = ToolContext {
         project_path: cwd,
         current_file: None,
+        provider: Some(provider),
     };
 
     let task = format!(
@@ -45,7 +54,9 @@ pub async fn run_fix(
         error
     );
 
-    rendering::print_info("Fixing error...\n");
+    println!();
+    rendering::print_info("Diagnosing error...");
+    println!();
 
     engine
         .execute(&task, &ctx, &|event| match event {
@@ -77,5 +88,6 @@ pub async fn run_fix(
         })
         .await?;
 
+    println!();
     Ok(())
 }

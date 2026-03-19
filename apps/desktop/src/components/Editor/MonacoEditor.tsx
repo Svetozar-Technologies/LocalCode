@@ -3,6 +3,8 @@ import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
 import { useAppStore } from '../../stores/appStore';
 import { invoke } from '@tauri-apps/api/core';
+import { useInlineCompletion } from '../../hooks/useInlineCompletion';
+import InlineEdit from './InlineEdit';
 
 /** Map store theme names to Monaco theme IDs */
 const THEME_MAP: Record<string, string> = {
@@ -187,11 +189,25 @@ export default function MonacoEditor() {
   const activeFileData = openFiles.find((f) => f.path === activeFile);
   const monacoTheme = THEME_MAP[theme] || 'localcode-dark';
 
+  // Wire up inline completion
+  useInlineCompletion(editorRef.current);
+
   const handleEditorMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
     registerAllThemes(monaco);
     monaco.editor.setTheme(monacoTheme);
     applyCSS(theme);
+
+    // Track selection changes for @selection mention
+    editor.onDidChangeCursorSelection(() => {
+      const sel = editor.getSelection();
+      if (sel && !sel.isEmpty()) {
+        const selectedText = editor.getModel()?.getValueInRange(sel) || '';
+        useAppStore.getState().setEditorSelection(selectedText);
+      } else {
+        useAppStore.getState().setEditorSelection('');
+      }
+    });
 
     // Cmd+S to save
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, async () => {
@@ -246,48 +262,54 @@ export default function MonacoEditor() {
         <h1>LocalCode</h1>
         <p>Privacy-first AI-powered code editor</p>
         <div style={{ marginTop: 20, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div className="shortcut"><kbd>Cmd+O</kbd> Open Folder</div>
           <div className="shortcut"><kbd>Cmd+P</kbd> Quick Open File</div>
+          <div className="shortcut"><kbd>Cmd+K</kbd> Inline Edit Selection</div>
+          <div className="shortcut"><kbd>Cmd+F</kbd> Find in File</div>
           <div className="shortcut"><kbd>Cmd+Shift+F</kbd> Search in Files</div>
           <div className="shortcut"><kbd>Cmd+`</kbd> Toggle Terminal</div>
           <div className="shortcut"><kbd>Cmd+I</kbd> AI Chat</div>
+          <div className="shortcut"><kbd>Cmd+B</kbd> Toggle Sidebar</div>
+          <div className="shortcut"><kbd>Cmd+Shift+I</kbd> Composer</div>
         </div>
       </div>
     );
   }
 
   return (
-    <Editor
-      height="100%"
-      defaultLanguage={activeFileData.language}
-      defaultValue={activeFileData.content}
-      theme={monacoTheme}
-      onMount={handleEditorMount}
-      onChange={(value) => {
-        if (value !== undefined && activeFile) {
-          updateFileContent(activeFile, value);
-        }
-      }}
-      options={{
-        fontSize: 14,
-        fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', 'Menlo', monospace",
-        fontLigatures: true,
-        minimap: { enabled: true, scale: 1 },
-        scrollBeyondLastLine: false,
-        renderWhitespace: 'selection',
-        bracketPairColorization: { enabled: true },
-        guides: { bracketPairs: true, indentation: true },
-        smoothScrolling: true,
-        cursorBlinking: 'smooth',
-        cursorSmoothCaretAnimation: 'on',
-        padding: { top: 8 },
-        suggest: { preview: true },
-        parameterHints: { enabled: true },
-        tabSize: 2,
-        wordWrap: 'off',
-        automaticLayout: true,
-        inlineSuggest: { enabled: true },
-      }}
-    />
+    <div style={{ position: 'relative', height: '100%' }}>
+      <InlineEdit editorInstance={editorRef.current} />
+      <Editor
+        height="100%"
+        defaultLanguage={activeFileData.language}
+        defaultValue={activeFileData.content}
+        theme={monacoTheme}
+        onMount={handleEditorMount}
+        onChange={(value) => {
+          if (value !== undefined && activeFile) {
+            updateFileContent(activeFile, value);
+          }
+        }}
+        options={{
+          fontSize: 14,
+          fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', 'Menlo', monospace",
+          fontLigatures: true,
+          minimap: { enabled: true, scale: 1 },
+          scrollBeyondLastLine: false,
+          renderWhitespace: 'selection',
+          bracketPairColorization: { enabled: true },
+          guides: { bracketPairs: true, indentation: true },
+          smoothScrolling: true,
+          cursorBlinking: 'smooth',
+          cursorSmoothCaretAnimation: 'on',
+          padding: { top: 8 },
+          suggest: { preview: true },
+          parameterHints: { enabled: true },
+          tabSize: 2,
+          wordWrap: 'off',
+          automaticLayout: true,
+          inlineSuggest: { enabled: true },
+        }}
+      />
+    </div>
   );
 }

@@ -19,6 +19,10 @@ pub struct IndexEntry {
 pub struct CodeIndex {
     pub entries: Vec<IndexEntry>,
     pub file_hashes: HashMap<String, u64>,
+    #[serde(default)]
+    pub doc_count: usize,
+    #[serde(default)]
+    pub term_doc_freqs: HashMap<String, usize>,
 }
 
 impl CodeIndex {
@@ -37,20 +41,94 @@ impl CodeIndex {
         });
     }
 
+    /// Recalculate statistics after indexing is complete
+    pub fn compute_stats(&mut self) {
+        self.doc_count = self.entries.len();
+        let docs: Vec<&str> = self.entries.iter().map(|e| e.content.as_str()).collect();
+        self.term_doc_freqs = embeddings::compute_doc_freqs(&docs);
+    }
+
     pub fn search(&self, query: &str, top_k: usize) -> Vec<&IndexEntry> {
+        if self.entries.is_empty() {
+            return Vec::new();
+        }
+
         let query_embedding = embeddings::simple_embed(query);
 
-        let mut scored: Vec<(f32, &IndexEntry)> = self
-            .entries
-            .iter()
-            .map(|entry| {
-                let sim = embeddings::cosine_similarity(&query_embedding, &entry.embedding);
-                (sim, entry)
-            })
-            .collect();
+        // If we have BM25 stats, use hybrid search
+        if self.doc_count > 0 && !self.term_doc_freqs.is_empty() {
+            let docs: Vec<&str> = self.entries.iter().map(|e| e.content.as_str()).collect();
+            let avg_doc_len = embeddings::compute_avg_doc_len(&docs);
 
-        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        scored.into_iter().take(top_k).map(|(_, entry)| entry).collect()
+            let results = embeddings::hybrid_search(
+                &query_embedding,
+                query,
+                &self.entries,
+                avg_doc_len,
+                self.doc_count,
+                &self.term_doc_freqs,
+                top_k,
+            );
+
+            results
+                .into_iter()
+                .map(|(_score, idx)| &self.entries[idx])
+                .collect()
+        } else {
+            // Fallback to pure cosine similarity
+            let mut scored: Vec<(f32, &IndexEntry)> = self
+                .entries
+                .iter()
+                .map(|entry| {
+                    let sim = embeddings::cosine_similarity(&query_embedding, &entry.embedding);
+                    (sim, entry)
+                })
+                .collect();
+
+            scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+            scored.into_iter().take(top_k).map(|(_, entry)| entry).collect()
+        }
+    }
+
+    /// Search returning entries with their relevance scores
+    pub fn search_with_scores(&self, query: &str, top_k: usize) -> Vec<(f32, &IndexEntry)> {
+        if self.entries.is_empty() {
+            return Vec::new();
+        }
+
+        let query_embedding = embeddings::simple_embed(query);
+
+        if self.doc_count > 0 && !self.term_doc_freqs.is_empty() {
+            let docs: Vec<&str> = self.entries.iter().map(|e| e.content.as_str()).collect();
+            let avg_doc_len = embeddings::compute_avg_doc_len(&docs);
+
+            let results = embeddings::hybrid_search(
+                &query_embedding,
+                query,
+                &self.entries,
+                avg_doc_len,
+                self.doc_count,
+                &self.term_doc_freqs,
+                top_k,
+            );
+
+            results
+                .into_iter()
+                .map(|(score, idx)| (score, &self.entries[idx]))
+                .collect()
+        } else {
+            let mut scored: Vec<(f32, &IndexEntry)> = self
+                .entries
+                .iter()
+                .map(|entry| {
+                    let sim = embeddings::cosine_similarity(&query_embedding, &entry.embedding);
+                    (sim, entry)
+                })
+                .collect();
+
+            scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+            scored.into_iter().take(top_k).collect()
+        }
     }
 
     pub fn remove_file(&mut self, file: &str) {

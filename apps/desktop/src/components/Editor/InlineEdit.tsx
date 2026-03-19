@@ -269,16 +269,18 @@ export default function InlineEdit({ editorInstance }: InlineEditProps) {
     };
   }, [editorInstance]);
 
-  // Listen for LLM streaming response
+  // Listen for LLM streaming response (reuse llm-chat events with inline-edit ID prefix)
   useEffect(() => {
-    const unlisten = listen<{ id: string; chunk: string }>('llm-inline-edit-chunk', (event) => {
+    const unlisten = listen<{ id: string; chunk: string }>('llm-chat-chunk', (event) => {
+      if (!event.payload.id.startsWith('inline-edit-')) return;
       setState((prev) => ({
         ...prev,
         proposedCode: prev.proposedCode + event.payload.chunk,
       }));
     });
 
-    const unlistenDone = listen<{ id: string }>('llm-inline-edit-done', () => {
+    const unlistenDone = listen<{ id: string }>('llm-chat-done', (event) => {
+      if (!event.payload.id.startsWith('inline-edit-')) return;
       setState((prev) => ({
         ...prev,
         status: prev.proposedCode ? 'preview' : 'error',
@@ -303,13 +305,23 @@ export default function InlineEdit({ editorInstance }: InlineEditProps) {
     }));
 
     const requestId = `inline-edit-${Date.now()}`;
+    const filePath = editorInstance?.getModel()?.uri.path || '';
 
     try {
-      await invoke('llm_inline_edit', {
+      // Use llm_chat with a specialized prompt for inline editing
+      await invoke('llm_chat', {
         responseId: requestId,
-        selectedCode: state.selectedText,
-        instruction: state.instruction,
-        filePath: editorInstance?.getModel()?.uri.path || '',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a code editing assistant. The user will give you a piece of code and an instruction. Output ONLY the modified code, with no explanations, no markdown fences, no commentary. Just the raw code.',
+          },
+          {
+            role: 'user',
+            content: `File: ${filePath}\n\nOriginal code:\n${state.selectedText}\n\nInstruction: ${state.instruction}\n\nModified code:`,
+          },
+        ],
+        context: '',
       });
     } catch (err) {
       setState((prev) => ({

@@ -4,6 +4,7 @@ use std::sync::Arc;
 use localcode_core::agent::{AgentEngine, AgentEvent, ToolContext, ToolRegistry};
 use localcode_core::agent::builtin;
 use localcode_core::agent::memory::MemoryManager;
+use localcode_core::agent::session::SessionStore;
 use localcode_core::config::Config;
 use localcode_core::llm::provider::*;
 
@@ -21,13 +22,13 @@ pub async fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
     let memory = MemoryManager::new();
 
     let mut conversation = Conversation::new(&cwd);
-    let mut agent_mode = false;
+    let mut agent_mode = true;
 
     let stdin = io::stdin();
 
     loop {
         if agent_mode {
-            print!("{} ", crossterm::style::Stylize::yellow("agent>"));
+            rendering::print_agent_prompt();
         } else {
             rendering::print_prompt();
         }
@@ -47,7 +48,7 @@ pub async fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(cmd) = slash::parse_slash(&input) {
             match cmd {
                 SlashCommand::Help => {
-                    slash::print_help();
+                    rendering::print_help();
                     continue;
                 }
                 SlashCommand::Clear => {
@@ -57,6 +58,9 @@ pub async fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 SlashCommand::Exit => {
                     let _ = conversation.save();
+                    println!();
+                    rendering::print_info("Session saved. Goodbye.");
+                    println!();
                     break;
                 }
                 SlashCommand::Config => {
@@ -76,12 +80,28 @@ pub async fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(name) = name {
                         rendering::print_info(&format!("Model switching to: {}", name));
                     } else {
-                        rendering::print_info(&format!("Current provider: {}", config.default_provider));
+                        rendering::print_info(&format!("Provider: {}", config.default_provider));
                     }
                     continue;
                 }
                 SlashCommand::Commit => {
                     run_commit(&provider, &cwd).await;
+                    continue;
+                }
+                SlashCommand::Sessions(query) => {
+                    handle_sessions_command(query.as_deref());
+                    continue;
+                }
+                SlashCommand::SessionInfo(id) => {
+                    handle_session_info(&id);
+                    continue;
+                }
+                SlashCommand::SessionDelete(id) => {
+                    handle_session_delete(&id);
+                    continue;
+                }
+                SlashCommand::Recall(query) => {
+                    handle_recall(&query);
                     continue;
                 }
                 SlashCommand::Unknown(cmd) => {
@@ -94,10 +114,7 @@ pub async fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
         // Toggle agent mode
         if input == "/agent" || input == "/a" {
             agent_mode = !agent_mode;
-            rendering::print_info(&format!(
-                "Agent mode: {}",
-                if agent_mode { "ON" } else { "OFF" }
-            ));
+            rendering::print_agent_mode_status(agent_mode);
             continue;
         }
 
@@ -112,9 +129,10 @@ pub async fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
             let ctx = ToolContext {
                 project_path: cwd.clone(),
                 current_file: None,
+                provider: Some(provider.clone()),
             };
 
-            rendering::print_assistant_prefix();
+            println!();
 
             let result = engine
                 .execute(&input, &ctx, &|event| match event {
@@ -137,7 +155,7 @@ pub async fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
                         io::stdout().flush().unwrap();
                     }
                     AgentEvent::Done(text) => {
-                        println!("\n");
+                        println!();
                         rendering::print_markdown(&text);
                     }
                     AgentEvent::Error(e) => {
@@ -162,7 +180,7 @@ pub async fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
                 ..Default::default()
             };
 
-            rendering::print_assistant_prefix();
+            println!();
 
             match provider.chat(conversation.messages.clone(), opts).await {
                 Ok(stream) => {
@@ -207,6 +225,14 @@ fn create_provider(config: &Config) -> Result<Arc<dyn LLMProvider>, Box<dyn std:
             }
             let model = config.get_anthropic_model();
             Arc::new(AnthropicProvider::new(&key, &model))
+        }
+        "ollama" | "local" => {
+            let server_url = &config.providers.local.server_url;
+            let base_url = format!("{}/v1", server_url);
+            let model = config.providers.local.active_catalog_model
+                .clone()
+                .unwrap_or_else(|| "qwen2.5-coder:14b".to_string());
+            Arc::new(OpenAIProvider::with_base_url("ollama", &base_url, &model))
         }
         _ => {
             Arc::new(LocalProvider::new())
@@ -266,4 +292,134 @@ async fn run_commit(provider: &Arc<dyn LLMProvider>, cwd: &str) {
         }
         Err(e) => rendering::print_error(&format!("Git diff failed: {}", e)),
     }
+}
+
+fn handle_sessions_command(query: Option<&str>) {
+    let store = SessionStore::new();
+
+    match query {
+        Some(q) if q.starts_with("search ") => {
+            let search_query = q.strip_prefix("search ").unwrap_or("").trim();
+            if search_query.is_empty() {
+                rendering::print_error("Usage: /sessions search <query>");
+                return;
+            }
+            let results = store.search(search_query, 20);
+            let display: Vec<(f32, String, String, String)> = results
+                .iter()
+                .map(|r| {
+                    (
+                        r.score,
+                        r.entry.id.clone(),
+                        r.entry.project_name.clone(),
+                        r.entry.title.clone(),
+                    )
+                })
+                .collect();
+            rendering::print_search_results(&display);
+        }
+        _ => {
+            // List recent sessions
+            let recent = store.list_recent(20);
+            let display: Vec<(String, u64, String, String)> = recent
+                .iter()
+                .map(|e| {
+                    (
+                        e.id.clone(),
+                        e.started_at,
+                        e.project_name.clone(),
+                        e.title.clone(),
+                    )
+                })
+                .collect();
+            rendering::print_sessions_list(&display);
+        }
+    }
+}
+
+fn handle_session_info(id: &str) {
+    let store = SessionStore::new();
+
+    // Support partial ID matching
+    let full_id = find_session_id(&store, id);
+    if let Some(ref fid) = full_id {
+        if let Some(session) = store.get_session(fid) {
+            rendering::print_session_detail(
+                &session.id,
+                &session.project_path,
+                session.started_at,
+                session.ended_at,
+                &session.files_modified,
+                &session.tasks_completed,
+                &session.conversation_summary,
+                &session.tags,
+            );
+            return;
+        }
+    }
+    rendering::print_error(&format!("Session not found: {}", id));
+}
+
+fn handle_session_delete(id: &str) {
+    let mut store = SessionStore::new();
+
+    let full_id = find_session_id(&store, id);
+    if let Some(fid) = full_id {
+        if store.delete_session(&fid) {
+            rendering::print_success(&format!("Deleted session {}", &fid[..8.min(fid.len())]));
+        } else {
+            rendering::print_error(&format!("Failed to delete session: {}", id));
+        }
+    } else {
+        rendering::print_error(&format!("Session not found: {}", id));
+    }
+}
+
+fn handle_recall(query: &str) {
+    let store = SessionStore::new();
+    let results = store.search(query, 1);
+
+    if let Some(top) = results.first() {
+        if let Some(session) = store.get_session(&top.entry.id) {
+            rendering::print_info(&format!(
+                "Recalled session: {} ({})",
+                session.title, session.project_name
+            ));
+            println!();
+            if !session.conversation_summary.is_empty() {
+                rendering::print_markdown(&session.conversation_summary);
+            }
+            if !session.files_modified.is_empty() {
+                rendering::print_info(&format!(
+                    "Files: {}",
+                    session.files_modified.join(", ")
+                ));
+            }
+            if !session.tags.is_empty() {
+                rendering::print_info(&format!("Tags: {}", session.tags.join(", ")));
+            }
+        } else {
+            rendering::print_error("Session data file missing");
+        }
+    } else {
+        rendering::print_info("No matching sessions found");
+    }
+}
+
+/// Find a session ID by prefix match
+fn find_session_id(store: &SessionStore, partial_id: &str) -> Option<String> {
+    let recent = store.list_recent(1000);
+    // Exact match first
+    if let Some(e) = recent.iter().find(|e| e.id == partial_id) {
+        return Some(e.id.clone());
+    }
+    // Prefix match
+    let matches: Vec<&localcode_core::agent::session::SessionIndexEntry> = recent
+        .iter()
+        .filter(|e| e.id.starts_with(partial_id))
+        .collect();
+    if matches.len() == 1 {
+        return Some(matches[0].id.clone());
+    }
+    None
 }

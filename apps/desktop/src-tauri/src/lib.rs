@@ -56,8 +56,12 @@ pub fn run() {
             commands::git::git_push,
             commands::git::git_pull,
             commands::git::git_list_branches,
+            commands::git::git_unstage,
+            commands::git::git_init,
+            commands::git::git_blame,
             // Agent
             commands::agent::agent_execute,
+            commands::agent::composer_generate,
             // Model management
             commands::llm::list_model_catalog,
             commands::llm::download_model,

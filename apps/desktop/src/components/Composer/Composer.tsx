@@ -217,54 +217,80 @@ export default function Composer() {
     setFileChanges([]);
     setError('');
 
-    const requestId = `composer-${Date.now()}`;
+    // Listen for agent step events (file changes come through as tool results)
+    const unlistenStep = await listen<any>('composer-step', (event) => {
+      const step = event.payload;
+      const tool = step.tool || '';
+      const result = step.result || '';
+      const args = step.args ? (typeof step.args === 'string' ? JSON.parse(step.args) : step.args) : {};
 
-    // Listen for file change events
-    const unlistenChange = await listen<{
-      id: string;
-      path: string;
-      original: string;
-      proposed: string;
-    }>('composer-file-change', (event) => {
-      if (event.payload.id !== requestId) return;
-      setFileChanges((prev) => [
-        ...prev,
-        {
-          path: event.payload.path,
-          originalContent: event.payload.original,
-          proposedContent: event.payload.proposed,
-          status: 'pending',
-          language: getLanguageFromPath(event.payload.path),
-        },
-      ]);
+      if ((tool === 'write_file' || tool === 'create_file') && !result.startsWith('Error')) {
+        const filePath = args.path || '';
+        if (filePath) {
+          // Read the file content to show in diff
+          invoke<string>('read_file', { path: filePath }).then((content) => {
+            setFileChanges((prev) => {
+              // Avoid duplicates
+              if (prev.some((fc) => fc.path === filePath)) return prev;
+              return [
+                ...prev,
+                {
+                  path: filePath,
+                  originalContent: '',
+                  proposedContent: content,
+                  status: 'pending' as const,
+                  language: getLanguageFromPath(filePath),
+                },
+              ];
+            });
+          }).catch(() => {});
+        }
+      } else if (tool === 'edit_file' && !result.startsWith('Error')) {
+        const filePath = args.path || '';
+        if (filePath) {
+          invoke<string>('read_file', { path: filePath }).then((content) => {
+            setFileChanges((prev) => {
+              const existing = prev.find((fc) => fc.path === filePath);
+              if (existing) {
+                return prev.map((fc) =>
+                  fc.path === filePath ? { ...fc, proposedContent: content } : fc
+                );
+              }
+              return [
+                ...prev,
+                {
+                  path: filePath,
+                  originalContent: '',
+                  proposedContent: content,
+                  status: 'pending' as const,
+                  language: getLanguageFromPath(filePath),
+                },
+              ];
+            });
+          }).catch(() => {});
+        }
+      }
     });
 
-    const unlistenDone = await listen<{ id: string }>('composer-done', (event) => {
-      if (event.payload.id !== requestId) return;
-      setStatus('reviewing');
-      unlistenChange();
-      unlistenDone();
+    const unlistenDone = await listen('composer-done', () => {
+      setStatus((prev) => prev === 'composing' ? 'reviewing' : prev);
     });
 
-    const unlistenError = await listen<{ id: string; error: string }>('composer-error', (event) => {
-      if (event.payload.id !== requestId) return;
+    const unlistenError = await listen<{ error: string }>('composer-error', (event) => {
       setStatus('error');
       setError(event.payload.error);
-      unlistenChange();
-      unlistenDone();
-      unlistenError();
     });
 
     try {
       await invoke('composer_generate', {
-        requestId,
         task: task.trim(),
         projectPath: projectPath || '',
       });
     } catch (err) {
       setStatus('error');
       setError(`Composer failed: ${err}`);
-      unlistenChange();
+    } finally {
+      unlistenStep();
       unlistenDone();
       unlistenError();
     }

@@ -2,6 +2,11 @@ use git2::{Repository, Signature};
 
 use crate::CoreResult;
 
+pub fn git_init(path: &str) -> CoreResult<()> {
+    Repository::init(path)?;
+    Ok(())
+}
+
 pub fn git_add(path: &str, files: &[String]) -> CoreResult<()> {
     let repo = Repository::discover(path)?;
     let mut index = repo.index()?;

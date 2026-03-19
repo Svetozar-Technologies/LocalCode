@@ -320,11 +320,13 @@ impl MemoryManager {
                 }
             }
 
-            // File tree
+            // File tree (cap at 500 chars to avoid wasting tokens on large dirs)
             if let Some(ref tree) = memory.file_tree_summary {
-                ctx.push_str("\n# Project Structure\n```\n");
-                ctx.push_str(tree);
-                ctx.push_str("\n```\n");
+                if tree.len() <= 500 {
+                    ctx.push_str("\n# Project Structure\n```\n");
+                    ctx.push_str(tree);
+                    ctx.push_str("\n```\n");
+                }
             }
 
             // Conventions
@@ -444,4 +446,122 @@ fn now_secs() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    /// Helper: create a MemoryManager that stores its global.json in a temp directory
+    fn memory_manager_in(dir: &Path) -> MemoryManager {
+        let global_path = dir.join("memory").join("global.json");
+        MemoryManager {
+            global_path,
+            global: GlobalMemory::default(),
+        }
+    }
+
+    #[test]
+    fn test_auto_discover_rust_project() {
+        let dir = TempDir::new().unwrap();
+        // Create a Cargo.toml so the project is detected as Rust
+        std::fs::write(dir.path().join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+
+        let mut mm = memory_manager_in(dir.path());
+        mm.auto_discover_project(dir.path().to_str().unwrap());
+
+        let mem = mm.get_project_memory(dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(mem.language.as_deref(), Some("Rust"));
+        assert_eq!(mem.build_system.as_deref(), Some("Cargo"));
+        assert_eq!(mem.test_command.as_deref(), Some("cargo test"));
+    }
+
+    #[test]
+    fn test_auto_discover_node_project() {
+        let dir = TempDir::new().unwrap();
+        // Create a package.json so the project is detected as TypeScript/JavaScript
+        std::fs::write(
+            dir.path().join("package.json"),
+            r#"{"name":"test","dependencies":{}}"#,
+        )
+        .unwrap();
+
+        let mut mm = memory_manager_in(dir.path());
+        mm.auto_discover_project(dir.path().to_str().unwrap());
+
+        let mem = mm.get_project_memory(dir.path().to_str().unwrap()).unwrap();
+        let lang = mem.language.as_deref().unwrap();
+        assert!(
+            lang.contains("TypeScript") || lang.contains("JavaScript"),
+            "Expected TypeScript or JavaScript, got: {}",
+            lang
+        );
+    }
+
+    #[test]
+    fn test_build_context_includes_framework() {
+        let dir = TempDir::new().unwrap();
+        let project = dir.path().to_str().unwrap();
+
+        let mut mm = memory_manager_in(dir.path());
+        // Manually set a framework on the project memory
+        let mem = mm.get_project_memory_mut(project);
+        mem.framework = Some("Next.js".to_string());
+        mem.language = Some("TypeScript".to_string());
+
+        let ctx = mm.build_context(project);
+        assert!(
+            ctx.contains("Next.js"),
+            "build_context should contain the framework name"
+        );
+    }
+
+    #[test]
+    fn test_save_and_load() {
+        let dir = TempDir::new().unwrap();
+        let project = "/tmp/fake_project";
+
+        let mut mm = memory_manager_in(dir.path());
+        mm.set_preference("theme", "dark");
+        let mem = mm.get_project_memory_mut(project);
+        mem.language = Some("Rust".to_string());
+        mem.conventions.push("use snake_case".to_string());
+        mm.save().unwrap();
+
+        // Reload from the same path
+        let loaded = MemoryManager::load_global(&mm.global_path).unwrap();
+        assert_eq!(loaded.preferences.get("theme").map(|s| s.as_str()), Some("dark"));
+        let loaded_mem = loaded.project_memories.get(project).unwrap();
+        assert_eq!(loaded_mem.language.as_deref(), Some("Rust"));
+        assert!(loaded_mem.conventions.contains(&"use snake_case".to_string()));
+    }
+
+    #[test]
+    fn test_session_summary_limit() {
+        let dir = TempDir::new().unwrap();
+        let project = "/tmp/some_project";
+
+        let mut mm = memory_manager_in(dir.path());
+
+        // Add 15 session summaries
+        for i in 0..15 {
+            mm.save_session_summary(
+                project,
+                SessionSummary {
+                    timestamp: i as u64,
+                    task: format!("task {}", i),
+                    files_modified: vec![],
+                    tasks_completed: vec![],
+                    summary: format!("summary {}", i),
+                },
+            );
+        }
+
+        let mem = mm.get_project_memory(project).unwrap();
+        assert_eq!(mem.sessions.len(), 10, "Only the last 10 sessions should be kept");
+        // The oldest remaining session should be #5 (0-indexed original timestamps 5..14)
+        assert_eq!(mem.sessions[0].timestamp, 5);
+        assert_eq!(mem.sessions[9].timestamp, 14);
+    }
 }

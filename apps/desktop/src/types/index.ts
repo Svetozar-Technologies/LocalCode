@@ -52,7 +52,7 @@ export interface SearchResult {
   matchLength: number;
 }
 
-export type SidebarView = 'explorer' | 'search' | 'git' | 'ai' | 'debug' | 'settings';
+export type SidebarView = 'explorer' | 'search' | 'git' | 'ai' | 'debug' | 'settings' | 'composer';
 
 export type BottomPanelTab = 'terminal' | 'problems' | 'output';
 

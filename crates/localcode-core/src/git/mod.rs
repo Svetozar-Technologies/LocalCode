@@ -5,3 +5,4 @@ pub mod blame;
 pub mod history;
 
 pub use status::*;
+pub use blame::BlameLine;

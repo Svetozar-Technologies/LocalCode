@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+
 use std::process::{Child, Command};
 use std::sync::{Arc, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
@@ -36,7 +36,7 @@ impl LocalProvider {
     }
 
     pub async fn start_server(&self, model_path: &str) -> Result<String, CoreError> {
-        // Kill existing server
+        // Kill existing managed server process
         {
             let mut proc = self.server_process.lock().map_err(|e| CoreError::Other(e.to_string()))?;
             if let Some(ref mut child) = *proc {
@@ -44,6 +44,9 @@ impl LocalProvider {
             }
             *proc = None;
         }
+
+        // Kill any orphaned llama-server processes to avoid GPU memory conflicts
+        let _ = Command::new("pkill").arg("-f").arg("llama-server").output();
 
         let model_name = std::path::Path::new(model_path)
             .file_stem()
@@ -153,6 +156,38 @@ impl LLMProvider for LocalProvider {
         messages: Vec<ChatMessage>,
         opts: ChatOptions,
     ) -> Result<ChatStream, CoreError> {
+        // When tools are present, use non-streaming to properly parse tool calls
+        if !opts.tools.is_empty() {
+            let response = self.chat_sync(messages, opts).await?;
+            let (tx, rx) = tokio::sync::mpsc::channel(10);
+            tokio::spawn(async move {
+                if let Some(ref tool_calls) = response.tool_calls {
+                    if !tool_calls.is_empty() {
+                        // Send the full message as a single chunk so the engine can extract tool calls
+                        let _ = tx.send(Ok(ChatChunk::Text(response.content.clone()))).await;
+                        for tc in tool_calls {
+                            let _ = tx.send(Ok(ChatChunk::ToolCallStart {
+                                id: tc.id.clone(),
+                                name: tc.function.name.clone(),
+                            })).await;
+                            let _ = tx.send(Ok(ChatChunk::ToolCallDelta {
+                                id: tc.id.clone(),
+                                arguments_delta: tc.function.arguments.clone(),
+                            })).await;
+                            let _ = tx.send(Ok(ChatChunk::ToolCallEnd {
+                                id: tc.id.clone(),
+                            })).await;
+                        }
+                        let _ = tx.send(Ok(ChatChunk::Done)).await;
+                        return;
+                    }
+                }
+                let _ = tx.send(Ok(ChatChunk::Text(response.content))).await;
+                let _ = tx.send(Ok(ChatChunk::Done)).await;
+            });
+            return Ok(Box::pin(ReceiverStream::new(rx)));
+        }
+
         let mut api_messages: Vec<serde_json::Value> = Vec::new();
 
         if let Some(ref system) = opts.system {
@@ -251,18 +286,29 @@ impl LLMProvider for LocalProvider {
         }
 
         for msg in &messages {
-            api_messages.push(serde_json::json!({
+            let mut m = serde_json::json!({
                 "role": msg.role,
                 "content": msg.content
-            }));
+            });
+            if let Some(ref tool_calls) = msg.tool_calls {
+                m["tool_calls"] = serde_json::to_value(tool_calls).unwrap_or_default();
+            }
+            if let Some(ref tool_call_id) = msg.tool_call_id {
+                m["tool_call_id"] = serde_json::json!(tool_call_id);
+            }
+            api_messages.push(m);
         }
 
-        let body = serde_json::json!({
+        let mut body = serde_json::json!({
             "messages": api_messages,
             "stream": false,
             "temperature": opts.temperature,
             "max_tokens": opts.max_tokens,
         });
+
+        if !opts.tools.is_empty() {
+            body["tools"] = serde_json::to_value(&opts.tools)?;
+        }
 
         let response = self
             .client
@@ -272,15 +318,21 @@ impl LLMProvider for LocalProvider {
             .await?;
 
         let result: serde_json::Value = response.json().await?;
-        let content = result["choices"][0]["message"]["content"]
+        let message = &result["choices"][0]["message"];
+
+        let content = message["content"]
             .as_str()
             .unwrap_or("")
             .to_string();
 
+        let tool_calls = message.get("tool_calls").and_then(|tc| {
+            serde_json::from_value::<Vec<ToolCall>>(tc.clone()).ok()
+        });
+
         Ok(ChatMessage {
             role: "assistant".to_string(),
             content,
-            tool_calls: None,
+            tool_calls,
             tool_call_id: None,
         })
     }

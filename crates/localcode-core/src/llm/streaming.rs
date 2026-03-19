@@ -1,4 +1,4 @@
-use futures::{Stream, StreamExt};
+use futures::StreamExt;
 
 use super::provider::*;
 use crate::CoreError;

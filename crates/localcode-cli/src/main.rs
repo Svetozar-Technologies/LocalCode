@@ -4,10 +4,10 @@ mod rendering;
 mod streaming;
 mod conversation;
 mod slash;
+#[allow(dead_code)]
 mod hooks;
 
 use clap::{Parser, Subcommand};
-use localcode_core::config::Config;
 
 #[derive(Parser)]
 #[command(name = "localcode", version, about = "LocalCode - AI-powered coding assistant")]
@@ -18,7 +18,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Start interactive chat (single-turn)
+    /// Send a single chat message (for interactive REPL, run `localcode` with no arguments)
     Chat {
         /// Question or prompt
         message: String,

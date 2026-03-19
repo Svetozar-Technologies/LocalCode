@@ -24,7 +24,7 @@ pub fn run_command(command: &str, cwd: &str) -> CoreResult<ProcessOutput> {
     })
 }
 
-pub fn run_command_with_timeout(command: &str, cwd: &str, timeout_secs: u64) -> CoreResult<ProcessOutput> {
+pub fn run_command_with_timeout(command: &str, cwd: &str, _timeout_secs: u64) -> CoreResult<ProcessOutput> {
     let child = Command::new("sh")
         .arg("-c")
         .arg(command)

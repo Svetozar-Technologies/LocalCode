@@ -151,3 +151,73 @@ pub trait LLMProvider: Send + Sync {
 
     fn capabilities(&self) -> ProviderCapabilities;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_chat_message_serialization() {
+        let msg = ChatMessage {
+            role: "user".to_string(),
+            content: "Hello, world!".to_string(),
+            tool_calls: None,
+            tool_call_id: None,
+        };
+
+        let json = serde_json::to_string(&msg).unwrap();
+        let deserialized: ChatMessage = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.role, "user");
+        assert_eq!(deserialized.content, "Hello, world!");
+        assert!(deserialized.tool_calls.is_none());
+        assert!(deserialized.tool_call_id.is_none());
+    }
+
+    #[test]
+    fn test_chat_message_with_tool_calls_serialization() {
+        let msg = ChatMessage {
+            role: "assistant".to_string(),
+            content: String::new(),
+            tool_calls: Some(vec![ToolCall {
+                id: "call_123".to_string(),
+                call_type: "function".to_string(),
+                function: ToolCallFunction {
+                    name: "read_file".to_string(),
+                    arguments: r#"{"path":"test.txt"}"#.to_string(),
+                },
+            }]),
+            tool_call_id: None,
+        };
+
+        let json = serde_json::to_string(&msg).unwrap();
+        let deserialized: ChatMessage = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.role, "assistant");
+        let tool_calls = deserialized.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].id, "call_123");
+        assert_eq!(tool_calls[0].function.name, "read_file");
+    }
+
+    #[test]
+    fn test_chat_options_defaults() {
+        let opts = ChatOptions::default();
+
+        assert!((opts.temperature - 0.7).abs() < f32::EPSILON);
+        assert_eq!(opts.max_tokens, 4096);
+        assert!(opts.tools.is_empty());
+        assert!(opts.stream);
+        assert!(opts.system.is_none());
+        assert!(opts.stop.is_none());
+    }
+
+    #[test]
+    fn test_completion_options_defaults() {
+        let opts = CompletionOptions::default();
+
+        assert_eq!(opts.max_tokens, 128);
+        assert!((opts.temperature - 0.2).abs() < f32::EPSILON);
+        assert!(!opts.stop.is_empty());
+    }
+}

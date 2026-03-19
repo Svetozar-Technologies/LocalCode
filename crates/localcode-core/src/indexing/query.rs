@@ -20,6 +20,8 @@ pub fn build_index(project_path: &str) -> CoreResult<CodeIndex> {
         .git_ignore(true)
         .build();
 
+    let mut changed = false;
+
     for entry in walker {
         let entry = entry.map_err(|e| crate::CoreError::Other(e.to_string()))?;
         let path = entry.path();
@@ -57,47 +59,58 @@ pub fn build_index(project_path: &str) -> CoreResult<CodeIndex> {
         // Re-index file
         index.remove_file(&path_str);
 
-        if let Ok(chunks) = chunker::chunk_file(&path_str, 50) {
+        if let Ok(chunks) = chunker::chunk_file(&path_str, 80) {
             for chunk in &chunks {
                 index.add_chunk(chunk);
             }
         }
 
         index.file_hashes.insert(path_str, modified);
+        changed = true;
+    }
+
+    // Recompute BM25 stats if anything changed
+    if changed {
+        index.compute_stats();
     }
 
     index.save(&index_path)?;
     Ok(index)
 }
 
-/// Ensure the index is fresh (rebuild if older than max_age_secs)
-pub fn ensure_index_fresh(project_path: &str, max_age_secs: u64) -> CoreResult<CodeIndex> {
+/// Auto-index on first call, skip if index is less than max_age_secs old
+pub fn index_if_needed(project_path: &str, max_age_secs: u64) -> CoreResult<CodeIndex> {
     let index_path = CodeIndex::index_path(project_path);
-    let needs_rebuild = if index_path.exists() {
-        let metadata = std::fs::metadata(&index_path)?;
-        let modified = metadata
-            .modified()
-            .ok()
-            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-        now - modified > max_age_secs
-    } else {
-        true
-    };
 
-    if needs_rebuild {
+    if !index_path.exists() {
+        return build_index(project_path);
+    }
+
+    let metadata = std::fs::metadata(&index_path)?;
+    let modified = metadata
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+
+    if now - modified > max_age_secs {
         build_index(project_path)
     } else {
         CodeIndex::load(&index_path)
     }
 }
 
-/// Query the index for relevant code chunks
+/// Ensure the index is fresh (rebuild if older than max_age_secs)
+pub fn ensure_index_fresh(project_path: &str, max_age_secs: u64) -> CoreResult<CodeIndex> {
+    index_if_needed(project_path, max_age_secs)
+}
+
+/// Query the index for relevant code chunks — returns file path, line range, relevance score, and content
 pub fn query_codebase(
     project_path: &str,
     query: &str,
@@ -112,14 +125,14 @@ pub fn query_codebase(
         ));
     }
 
-    let results = index.search(query, top_k);
+    let results = index.search_with_scores(query, top_k);
 
     Ok(results
         .iter()
-        .map(|entry| {
+        .map(|(score, entry)| {
             format!(
-                "// {}:{}-{}\n{}",
-                entry.file, entry.start_line, entry.end_line, entry.content
+                "// {}:{}-{} (relevance: {:.2})\n{}",
+                entry.file, entry.start_line, entry.end_line, score, entry.content
             )
         })
         .collect())

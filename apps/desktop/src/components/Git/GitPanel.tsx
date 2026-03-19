@@ -126,7 +126,7 @@ export default function GitPanel() {
         }))
       );
 
-      const branch = await invoke<string>('git_current_branch', {
+      const branch = await invoke<string>('git_branch', {
         path: projectPath,
       });
       setCurrentBranch(branch);

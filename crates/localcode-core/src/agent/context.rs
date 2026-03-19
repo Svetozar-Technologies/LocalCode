@@ -209,3 +209,66 @@ impl ContextManager {
         summary
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_msg(role: &str, content: &str) -> ChatMessage {
+        ChatMessage {
+            role: role.to_string(),
+            content: content.to_string(),
+            tool_calls: None,
+            tool_call_id: None,
+        }
+    }
+
+    #[test]
+    fn test_add_messages() {
+        let mut cm = ContextManager::new(10000);
+        cm.add_message(make_msg("user", "hello"));
+        cm.add_message(make_msg("assistant", "hi there"));
+        cm.add_message(make_msg("user", "how are you?"));
+        assert_eq!(cm.messages().len(), 3);
+        assert_eq!(cm.messages()[0].role, "user");
+        assert_eq!(cm.messages()[1].role, "assistant");
+        assert_eq!(cm.messages()[2].content, "how are you?");
+    }
+
+    #[test]
+    fn test_token_estimation() {
+        // "the quick brown fox jumps over the lazy dog" = 9 words
+        // estimate_tokens counts words * 1.3 => 9 * 1.3 = 11.7 => 11
+        let tokens = ContextManager::estimate_tokens("the quick brown fox jumps over the lazy dog");
+        assert!(tokens >= 9, "Token estimate should be at least the word count");
+        assert!(tokens <= 20, "Token estimate should be reasonable for 9 words");
+    }
+
+    #[test]
+    fn test_needs_compression_under_threshold() {
+        // max_tokens = 1000, threshold is 75% = 750
+        let mut cm = ContextManager::new(1000);
+        // Add a short message that will be well under threshold
+        cm.add_message(make_msg("user", "hello world"));
+        assert!(
+            !cm.needs_compression(),
+            "Should not need compression when well below 75% capacity"
+        );
+    }
+
+    #[test]
+    fn test_needs_compression_over_threshold() {
+        // max_tokens = 10, threshold is 75% = 7
+        // We need content whose estimated tokens exceed 7
+        let mut cm = ContextManager::new(10);
+        // "one two three four five six seven eight nine ten" = 10 words => ~13 tokens
+        cm.add_message(make_msg(
+            "user",
+            "one two three four five six seven eight nine ten",
+        ));
+        assert!(
+            cm.needs_compression(),
+            "Should need compression when above 75% capacity"
+        );
+    }
+}

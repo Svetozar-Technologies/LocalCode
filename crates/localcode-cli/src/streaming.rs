@@ -24,7 +24,7 @@ pub async fn stream_to_stdout(mut stream: ChatStream) -> Result<String, CoreErro
                 print!("\n  {} {} ", "[".dark_grey(), name.cyan());
                 io::stdout().flush().unwrap();
             }
-            ChatChunk::ToolCallDelta { arguments_delta, .. } => {
+            ChatChunk::ToolCallDelta { .. } => {
                 // Don't print raw JSON args during streaming
             }
             ChatChunk::ToolCallEnd { .. } => {

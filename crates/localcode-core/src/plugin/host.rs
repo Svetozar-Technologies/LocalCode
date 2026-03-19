@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::path::Path;
 
 use super::manifest::{LoadedPlugin, PluginCapabilities};
 use crate::CoreResult;
@@ -79,7 +78,7 @@ impl PluginHost {
         &self,
         plugin_name: &str,
         function: &str,
-        input: &str,
+        _input: &str,
     ) -> CoreResult<PluginCallResult> {
         let plugin = self
             .plugins

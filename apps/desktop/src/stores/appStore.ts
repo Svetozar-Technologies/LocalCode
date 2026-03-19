@@ -78,6 +78,27 @@ interface AppState {
   // Theme
   theme: string;
   setTheme: (theme: string) => void;
+
+  // Inline completion status
+  completionStatus: 'idle' | 'completing';
+  setCompletionStatus: (status: 'idle' | 'completing') => void;
+
+  // Editor selection (for @selection mention)
+  editorSelection: string;
+  setEditorSelection: (text: string) => void;
+
+  // Last terminal output (for @terminal mention)
+  lastTerminalOutput: string;
+  setLastTerminalOutput: (output: string) => void;
+
+  // Quick Open
+  quickOpenVisible: boolean;
+  setQuickOpenVisible: (visible: boolean) => void;
+  toggleQuickOpen: () => void;
+
+  // Inline Edit
+  inlineEditVisible: boolean;
+  setInlineEditVisible: (visible: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -215,6 +236,27 @@ export const useAppStore = create<AppState>((set) => ({
     localStorage.setItem('localcode-theme', theme);
     set({ theme });
   },
+
+  // Inline completion status
+  completionStatus: 'idle',
+  setCompletionStatus: (status) => set({ completionStatus: status }),
+
+  // Editor selection
+  editorSelection: '',
+  setEditorSelection: (text) => set({ editorSelection: text }),
+
+  // Last terminal output
+  lastTerminalOutput: '',
+  setLastTerminalOutput: (output) => set({ lastTerminalOutput: output }),
+
+  // Quick Open
+  quickOpenVisible: false,
+  setQuickOpenVisible: (visible) => set({ quickOpenVisible: visible }),
+  toggleQuickOpen: () => set((state) => ({ quickOpenVisible: !state.quickOpenVisible })),
+
+  // Inline Edit
+  inlineEditVisible: false,
+  setInlineEditVisible: (visible) => set({ inlineEditVisible: visible }),
 }));
 
 function toggleDirRecursive(tree: FileEntry[], path: string): FileEntry[] {

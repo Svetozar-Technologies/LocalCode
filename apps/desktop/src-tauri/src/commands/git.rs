@@ -49,3 +49,18 @@ pub fn git_pull(path: String, remote: String, branch: String) -> Result<String, 
 pub fn git_list_branches(path: String) -> Result<Vec<String>, String> {
     git::remote::git_list_branches(&path).map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub fn git_unstage(path: String, files: Vec<String>) -> Result<(), String> {
+    git::staging::git_unstage(&path, &files).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn git_init(path: String) -> Result<(), String> {
+    git::staging::git_init(&path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn git_blame(path: String, file_path: String) -> Result<Vec<git::BlameLine>, String> {
+    git::blame::git_blame(&path, &file_path).map_err(|e| e.to_string())
+}

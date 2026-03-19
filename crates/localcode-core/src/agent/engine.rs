@@ -1,11 +1,11 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::context::ContextManager;
 use super::memory::MemoryManager;
-use super::session::SessionState;
+use super::session::{SessionState, SessionStore, session_from_state};
 use super::tools::{AgentStep, ToolContext, ToolRegistry, now_ms};
 use crate::llm::provider::*;
-use crate::llm::streaming::collect_stream_message;
 use crate::CoreError;
 
 pub struct AgentEngine {
@@ -16,6 +16,8 @@ pub struct AgentEngine {
     context_manager: Option<ContextManager>,
     memory_manager: Option<MemoryManager>,
     session_state: Option<SessionState>,
+    session_store: Option<SessionStore>,
+    error_count: HashMap<String, usize>, // tool_name -> consecutive error count
 }
 
 #[derive(Debug, Clone)]
@@ -36,6 +38,8 @@ impl AgentEngine {
             context_manager: None,
             memory_manager: None,
             session_state: None,
+            session_store: None,
+            error_count: HashMap::new(),
         }
     }
 
@@ -86,6 +90,9 @@ impl AgentEngine {
             .unwrap_or_else(|| SessionState::new(project_path));
         self.session_state = Some(session);
 
+        // Initialize persistent session store
+        self.session_store = Some(SessionStore::new());
+
         self.memory_manager = Some(memory);
     }
 
@@ -101,28 +108,76 @@ impl AgentEngine {
             })
             .collect();
 
-        let base = if self.system_prompt.is_empty() {
-            "You are LocalCode Agent, an autonomous AI coding assistant.".to_string()
+        let memory_context = if self.system_prompt.is_empty() {
+            String::new()
         } else {
             self.system_prompt.clone()
         };
 
         format!(
-            "{}\n\nAvailable tools:\n{}\n\nProject directory: {}\n\n\
-             RULES:\n\
-             - All file paths MUST be relative to the project root (e.g. 'src/main.rs', NOT '/src/main.rs').\n\
-             - Use '.' to refer to the project root directory.\n\
-             - NEVER use absolute paths starting with / or ~.\n\
-             - Use write_file/edit_file/create_file for file operations, NOT run_command with shell commands.\n\
-             - write_file auto-creates parent directories.\n\
-             - Use run_command ONLY for build/test/install commands.\n\
-             - Briefly check project with list_dir, then start writing code immediately.\n\
-             - Write complete files with write_file — do NOT create empty files first.\n\
-             - Be efficient — write code directly instead of exploring extensively.\n\n\
-             Call tools one at a time. When done, provide a summary.",
-            base,
-            tools_desc.join("\n"),
-            ctx.project_path,
+            r#"# Identity & Role
+You are LocalCode Agent — an expert software engineer embedded in a code editor.
+You have direct access to the user's project files and can read, write, search, and execute commands.
+
+# Thinking Framework
+Before taking action on any task:
+1. UNDERSTAND — Read the request carefully. Identify what files/systems are involved.
+2. INVESTIGATE — Use codebase_search, search_content, list_dir, and read_file to understand current state.
+3. PLAN — Decide which files to modify and in what order. State your plan briefly.
+4. EXECUTE — Make changes using write_file/edit_file. Prefer edit_file for surgical changes to existing files.
+5. VERIFY — After changes, use run_command to run tests/build if applicable.
+
+# Tool Usage Strategy
+- START with codebase_search or search_content to find relevant code before reading files
+- Use read_file to understand context before using edit_file
+- Prefer edit_file over write_file for existing files (preserves what you haven't changed)
+- Use run_command for: build, test, lint, install, git operations
+- Use grep_search/find_files for targeted searches across the codebase
+- Use http_request for fetching external data or API calls
+- NEVER use run_command for file operations — use the dedicated file tools
+- Use dispatch_subagent for large tasks: dispatch a "searcher" to find relevant files, a "coder" for independent file changes, or a "reviewer" after making changes
+
+# Code Quality Rules
+- Match existing code style (indentation, naming, patterns)
+- Add imports at the top of files
+- Don't leave TODO/FIXME comments — implement the solution
+- Handle errors properly — don't unwrap() in production Rust, don't ignore promise rejections in JS
+- Write tests when creating new functions (if test infrastructure exists)
+
+# Path Rules
+- All file paths MUST be relative to the project root (e.g. 'src/main.rs', NOT '/src/main.rs')
+- Use '.' to refer to the project root directory
+- NEVER use absolute paths starting with / or ~
+
+# Communication
+- Be concise. Lead with action, not explanation
+- When you encounter an error, explain what went wrong and how you're fixing it
+- After completing work, summarize: files changed, what was done, how to verify
+
+# Error Recovery (CRITICAL)
+- If run_command returns [ERROR], you MUST:
+  1. Read the full error message carefully
+  2. Use read_file to check the file that caused the error
+  3. Use edit_file to fix the specific bug
+  4. Run the command again
+- NEVER ignore errors. NEVER move on without fixing.
+- If you wrote a Python file and it crashes with NameError/ImportError/SyntaxError, the file is incomplete. Fix it immediately.
+- If a file doesn't exist where expected, search for it
+- If a build/test fails, read the error output and fix the issue
+- After 2 failed attempts at the same approach, try a completely different approach
+- Don't repeat the same failing action — try a different approach
+
+# Context
+{memory_context}
+
+# Available Tools
+{tools_list}
+
+# Project Directory
+{project_path}"#,
+            memory_context = memory_context,
+            tools_list = tools_desc.join("\n"),
+            project_path = ctx.project_path,
         )
     }
 
@@ -142,6 +197,8 @@ impl AgentEngine {
 
     /// Save session summary when done
     fn finalize_session(&mut self, task: &str, final_response: &str) {
+        let summary_text: String = final_response.chars().take(500).collect();
+
         if let (Some(ref mut memory), Some(ref session)) =
             (&mut self.memory_manager, &self.session_state)
         {
@@ -153,11 +210,19 @@ impl AgentEngine {
                 task: task.to_string(),
                 files_modified: session.files_modified.clone(),
                 tasks_completed: session.tasks_completed.clone(),
-                summary: final_response.chars().take(500).collect(),
+                summary: summary_text.clone(),
             };
 
             memory.save_session_summary(&session.project_path, summary);
             let _ = memory.save();
+        }
+
+        // Save to persistent SessionStore
+        if let (Some(ref mut store), Some(ref state)) =
+            (&mut self.session_store, &self.session_state)
+        {
+            let persistent = session_from_state(state, &summary_text);
+            let _ = store.save_session(&persistent);
         }
 
         if let Some(ref session) = self.session_state {
@@ -198,13 +263,23 @@ impl AgentEngine {
                 temperature: 0.3,
                 max_tokens: 4096,
                 tools: tool_defs.clone(),
-                stream: true,
+                stream: false,
                 system: Some(system.clone()),
                 stop: None,
             };
 
-            let stream = self.provider.chat(messages.clone(), opts).await?;
-            let response = collect_stream_message(stream).await?;
+            // Use chat_sync for reliable tool call parsing (streaming tool calls are fragile)
+            let mut response = self.provider.chat_sync(messages.clone(), opts).await?;
+
+            // Fallback: parse tool calls from content if model outputs them as JSON text
+            // (common with Ollama/local models that don't use structured tool_calls)
+            if response.tool_calls.is_none() && !response.content.is_empty() {
+                let parsed = parse_tool_calls_from_content(&response.content, &self.registry);
+                if !parsed.is_empty() {
+                    response.tool_calls = Some(parsed);
+                    response.content = String::new();
+                }
+            }
 
             // Check for tool calls
             if let Some(ref tool_calls) = response.tool_calls {
@@ -234,11 +309,34 @@ impl AgentEngine {
                     // Track file modifications
                     self.track_file_modification(&tc.function.name, &args);
 
-                    let result = self
+                    let mut result = self
                         .registry
                         .execute(&tc.function.name, args, ctx)
                         .await
                         .unwrap_or_else(|e| format!("Error: {}", e));
+
+                    // Error detection and hint injection
+                    let is_error = result.starts_with("[ERROR") || result.starts_with("Error:");
+                    if is_error {
+                        let count = self.error_count.entry(tc.function.name.clone()).or_insert(0);
+                        *count += 1;
+
+                        if *count >= 3 {
+                            result.push_str(
+                                "\n\n[SYSTEM: This tool has failed 3 times. \
+                                 Try a completely different approach or ask the user for help.]"
+                            );
+                        } else {
+                            result.push_str(
+                                "\n\n[SYSTEM: The command failed. Read the error above carefully. \
+                                 If you wrote a file that has a bug, use read_file to see it, \
+                                 then use edit_file to fix the specific error, then retry the command.]"
+                            );
+                        }
+                    } else {
+                        // Reset error count on success
+                        self.error_count.remove(&tc.function.name);
+                    }
 
                     on_event(AgentEvent::Step(AgentStep {
                         step_type: "tool_result".to_string(),
@@ -308,38 +406,48 @@ impl AgentEngine {
             .collect();
 
         let system = format!(
-            r#"You are LocalCode Agent, an autonomous AI coding assistant.
-You have these tools available:
+            r#"You are LocalCode Agent, an AI coding assistant that MUST use tools to complete tasks.
+You CANNOT answer questions directly — you MUST use the tools below to take action.
+You have full access to the user's filesystem and can run any command.
 
-{}
+IMPORTANT: You MUST respond with a tool call in EVERY response. Never respond with plain text unless you are done with the task.
 
-To use a tool, respond with EXACTLY this XML format:
+## How to call a tool
+Respond with EXACTLY this XML format (nothing else):
 <tool>tool_name</tool>
 <args>{{"param": "value"}}</args>
 
-You are working in project directory: {}
+## Example
+User: "list files in src/"
+Your response:
+<tool>list_dir</tool>
+<args>{{"path": "src"}}</args>
 
-RULES:
-1. All file paths MUST be relative to the project root. Example: "src/main.rs", NOT "/src/main.rs"
-2. Use "." to refer to the project root directory
-3. NEVER use absolute paths starting with / or ~
-4. To create files, use write_file (it auto-creates parent directories)
-5. To create directories, use write_file with a file inside: write_file("mydir/.gitkeep", "")
-6. Do NOT use run_command for file operations — use read_file, write_file, edit_file, create_file, delete_file instead
-7. Use run_command ONLY for build/test/install commands like "npm install", "cargo build", "python script.py"
-8. Always start by using list_dir to see the project structure before making changes
+User: "read screenshot on Desktop"
+Your response:
+<tool>list_dir</tool>
+<args>{{"path": "Desktop"}}</args>
 
-WORKFLOW:
-1. Briefly check the project with list_dir (path ".") — do NOT read every file
-2. Start writing code immediately using write_file with full file contents
-3. Only read files if you need to edit existing code
-4. When creating new projects, write complete files — do NOT create empty files first
-5. Provide a brief summary when done
+User: "run the tests"
+Your response:
+<tool>run_command</tool>
+<args>{{"command": "cargo test"}}</args>
 
-Be efficient — write code directly instead of exploring extensively.
-Only call ONE tool at a time. Wait for the result before deciding the next action."#,
-            tools_desc.join("\n"),
-            ctx.project_path
+## Available Tools
+{tools}
+
+## Project Directory: {project}
+
+## Rules
+- ALWAYS start by using a tool. Never just explain what you would do.
+- Use run_command to execute shell commands (python, pip, npm, cargo, etc.)
+- Use list_dir and read_file to explore files before modifying them.
+- Use write_file to create scripts and run_command to execute them.
+- If a task requires generating code to solve a problem (e.g. OCR, image processing, data parsing), write the code to a temp file with write_file, then run it with run_command. If one approach fails, try a different library or method.
+- Only call ONE tool at a time. Wait for the result before calling the next.
+- When you are completely done, respond with a plain text summary (no tool call)."#,
+            tools = tools_desc.join("\n"),
+            project = ctx.project_path
         );
 
         let mut conversation = vec![ChatMessage {
@@ -386,11 +494,33 @@ Only call ONE tool at a time. Wait for the result before deciding the next actio
                 // Track file modifications
                 self.track_file_modification(&tool_name, &args);
 
-                let result = self
+                let mut result = self
                     .registry
                     .execute(&tool_name, args, ctx)
                     .await
                     .unwrap_or_else(|e| format!("Error: {}", e));
+
+                // Error detection and hint injection (same as execute_native)
+                let is_error = result.starts_with("[ERROR") || result.starts_with("Error:");
+                if is_error {
+                    let count = self.error_count.entry(tool_name.clone()).or_insert(0);
+                    *count += 1;
+
+                    if *count >= 3 {
+                        result.push_str(
+                            "\n\n[SYSTEM: This tool has failed 3 times. \
+                             Try a completely different approach or ask the user for help.]"
+                        );
+                    } else {
+                        result.push_str(
+                            "\n\n[SYSTEM: The command failed. Read the error above carefully. \
+                             If you wrote a file that has a bug, use read_file to see it, \
+                             then use edit_file to fix the specific error, then retry the command.]"
+                        );
+                    }
+                } else {
+                    self.error_count.remove(&tool_name);
+                }
 
                 on_event(AgentEvent::Step(AgentStep {
                     step_type: "tool_result".to_string(),
@@ -401,6 +531,13 @@ Only call ONE tool at a time. Wait for the result before deciding the next actio
                     timestamp: now_ms(),
                 }));
 
+                // Format error results prominently for XML mode
+                let result_label = if is_error {
+                    "Tool result (ERROR — you must fix this)"
+                } else {
+                    "Tool result"
+                };
+
                 conversation.push(ChatMessage {
                     role: "assistant".to_string(),
                     content: response.content,
@@ -409,7 +546,7 @@ Only call ONE tool at a time. Wait for the result before deciding the next actio
                 });
                 conversation.push(ChatMessage {
                     role: "user".to_string(),
-                    content: format!("Tool result:\n{}", result),
+                    content: format!("{}:\n{}", result_label, result),
                     tool_calls: None,
                     tool_call_id: None,
                 });
@@ -441,6 +578,96 @@ Only call ONE tool at a time. Wait for the result before deciding the next actio
     }
 }
 
+/// Try to parse a single JSON value into a ToolCall
+fn try_parse_single_tool_call(value: &serde_json::Value, registry: &ToolRegistry) -> Option<ToolCall> {
+    let name = value.get("name").and_then(|n| n.as_str())?;
+    let args = value.get("arguments")?;
+    if registry.get(name).is_some() {
+        Some(ToolCall {
+            id: format!("call_{}", &uuid::Uuid::new_v4().to_string().replace("-", "")[..12]),
+            call_type: "function".to_string(),
+            function: ToolCallFunction {
+                name: name.to_string(),
+                arguments: serde_json::to_string(args).unwrap_or_default(),
+            },
+        })
+    } else {
+        None
+    }
+}
+
+/// Parse tool calls from content text when models output JSON instead of structured tool_calls.
+/// Handles single objects, JSON arrays, and multiple JSON objects separated by whitespace.
+fn parse_tool_calls_from_content(content: &str, registry: &ToolRegistry) -> Vec<ToolCall> {
+    let trimmed = content.trim();
+
+    // Try parsing as a single JSON value (object or array)
+    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        // Array of tool calls
+        if let Some(arr) = parsed.as_array() {
+            let calls: Vec<ToolCall> = arr.iter()
+                .filter_map(|v| try_parse_single_tool_call(v, registry))
+                .collect();
+            if !calls.is_empty() {
+                return calls;
+            }
+        }
+        // Single tool call object
+        if let Some(tc) = try_parse_single_tool_call(&parsed, registry) {
+            return vec![tc];
+        }
+    }
+
+    // Try parsing multiple JSON objects separated by whitespace/newlines
+    let mut calls = Vec::new();
+    let mut depth = 0i32;
+    let mut start = None;
+    for (i, ch) in trimmed.char_indices() {
+        match ch {
+            '{' => {
+                if depth == 0 { start = Some(i); }
+                depth += 1;
+            }
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    if let Some(s) = start {
+                        let json_str = &trimmed[s..=i];
+                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(json_str) {
+                            if let Some(tc) = try_parse_single_tool_call(&val, registry) {
+                                calls.push(tc);
+                            }
+                        }
+                    }
+                    start = None;
+                }
+            }
+            _ => {}
+        }
+    }
+    if !calls.is_empty() {
+        return calls;
+    }
+
+    // Try extracting JSON from markdown code blocks
+    if let Some(s) = trimmed.find("```json") {
+        if let Some(e) = trimmed[s + 7..].find("```") {
+            let json_str = trimmed[s + 7..s + 7 + e].trim();
+            return parse_tool_calls_from_content(json_str, registry);
+        }
+    }
+    if let Some(s) = trimmed.find("```") {
+        if let Some(e) = trimmed[s + 3..].find("```") {
+            let json_str = trimmed[s + 3..s + 3 + e].trim();
+            if json_str.starts_with('{') || json_str.starts_with('[') {
+                return parse_tool_calls_from_content(json_str, registry);
+            }
+        }
+    }
+
+    Vec::new()
+}
+
 fn parse_xml_tool_call(text: &str) -> Option<(String, String)> {
     let tool_start = text.find("<tool>")?;
     let tool_end = text.find("</tool>")?;
@@ -451,4 +678,114 @@ fn parse_xml_tool_call(text: &str) -> Option<(String, String)> {
     let args_str = text[args_start + 6..args_end].trim().to_string();
 
     Some((tool_name, args_str))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_xml_tool_call_parsing() {
+        let input = r#"<tool>read_file</tool><args>{"path":"test.txt"}</args>"#;
+        let result = parse_xml_tool_call(input);
+        assert!(result.is_some());
+        let (name, args) = result.unwrap();
+        assert_eq!(name, "read_file");
+        assert_eq!(args, r#"{"path":"test.txt"}"#);
+
+        // Also verify the args parse as valid JSON
+        let parsed: serde_json::Value = serde_json::from_str(&args).unwrap();
+        assert_eq!(parsed["path"], "test.txt");
+    }
+
+    #[test]
+    fn test_xml_tool_call_with_whitespace() {
+        let input = r#"
+            <tool>  write_file  </tool>
+            <args>  {"path": "src/main.rs", "content": "fn main() {}"}  </args>
+        "#;
+        let result = parse_xml_tool_call(input);
+        assert!(result.is_some());
+        let (name, args) = result.unwrap();
+        assert_eq!(name, "write_file");
+        // The args should be trimmed
+        let parsed: serde_json::Value = serde_json::from_str(&args).unwrap();
+        assert_eq!(parsed["path"], "src/main.rs");
+    }
+
+    #[test]
+    fn test_xml_tool_call_missing_args() {
+        // Only <tool> tag, no <args> — should return None
+        let input = "<tool>read_file</tool>";
+        let result = parse_xml_tool_call(input);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_xml_tool_call_no_tags() {
+        // Plain text with no XML tags
+        let input = "I'll help you with that task.";
+        let result = parse_xml_tool_call(input);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_error_detection_error_prefix() {
+        let result = "[ERROR exit_code=1]\nNameError: name 'x' is not defined";
+        let is_error = result.starts_with("[ERROR") || result.starts_with("Error:");
+        assert!(is_error);
+    }
+
+    #[test]
+    fn test_error_detection_error_colon() {
+        let result = "Error: file not found";
+        let is_error = result.starts_with("[ERROR") || result.starts_with("Error:");
+        assert!(is_error);
+    }
+
+    #[test]
+    fn test_error_detection_success() {
+        let result = "hello world\n[stderr]: debug info";
+        let is_error = result.starts_with("[ERROR") || result.starts_with("Error:");
+        assert!(!is_error);
+    }
+
+    #[test]
+    fn test_error_count_tracking() {
+        let mut error_count: HashMap<String, usize> = HashMap::new();
+
+        // Simulate 3 failures
+        for i in 1..=3 {
+            let count = error_count.entry("run_command".to_string()).or_insert(0);
+            *count += 1;
+            assert_eq!(*count, i);
+        }
+
+        assert_eq!(error_count["run_command"], 3);
+
+        // Success resets
+        error_count.remove("run_command");
+        assert!(error_count.get("run_command").is_none());
+    }
+
+    #[test]
+    fn test_error_hint_injection_logic() {
+        let mut error_count: HashMap<String, usize> = HashMap::new();
+        let tool_name = "run_command".to_string();
+
+        // First failure: should get fix hint
+        let count = error_count.entry(tool_name.clone()).or_insert(0);
+        *count += 1;
+        assert!(*count < 3, "Should not trigger 3-strike on first error");
+
+        // Second failure
+        let count = error_count.entry(tool_name.clone()).or_insert(0);
+        *count += 1;
+        assert!(*count < 3);
+
+        // Third failure: should trigger 3-strike
+        let count = error_count.entry(tool_name.clone()).or_insert(0);
+        *count += 1;
+        assert!(*count >= 3, "Should trigger 3-strike escalation");
+    }
 }

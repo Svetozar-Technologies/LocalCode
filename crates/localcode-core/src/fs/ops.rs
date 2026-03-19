@@ -187,3 +187,113 @@ pub fn resolve_path(path: &str, project_path: &str) -> String {
 
     format!("{}/{}", project_path, resolved.display())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_resolve_relative_path() {
+        let base = "/project";
+        let result = resolve_path("src/main.rs", base);
+        assert_eq!(result, "/project/src/main.rs");
+    }
+
+    #[test]
+    fn test_resolve_dot_path() {
+        let base = "/project";
+        let result = resolve_path(".", base);
+        assert_eq!(result, "/project");
+    }
+
+    #[test]
+    fn test_resolve_blocks_traversal() {
+        let base = "/project";
+        let result = resolve_path("../../../etc/passwd", base);
+        assert!(result.starts_with("/project"));
+        assert!(!result.contains(".."));
+    }
+
+    #[test]
+    fn test_resolve_empty_path() {
+        let base = "/project";
+        let result = resolve_path("", base);
+        assert_eq!(result, "/project");
+    }
+
+    #[test]
+    fn test_write_file_creates_parents() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("a/b/c/file.txt");
+        write_file(path.to_str().unwrap(), "hello").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "hello");
+    }
+
+    #[test]
+    fn test_write_file_overwrites() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.txt");
+        write_file(path.to_str().unwrap(), "first").unwrap();
+        write_file(path.to_str().unwrap(), "second").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "second");
+    }
+
+    #[test]
+    fn test_read_file_content() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("test.txt");
+        std::fs::write(&path, "hello world").unwrap();
+        let content = read_file(path.to_str().unwrap()).unwrap();
+        assert_eq!(content, "hello world");
+    }
+
+    #[test]
+    fn test_create_file_new() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("new.txt");
+        create_file(path.to_str().unwrap()).unwrap();
+        assert!(path.exists());
+    }
+
+    #[test]
+    fn test_delete_entry_file() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("to_delete.txt");
+        std::fs::write(&path, "bye").unwrap();
+        delete_entry(path.to_str().unwrap()).unwrap();
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn test_read_dir_returns_entries() {
+        let dir = TempDir::new().unwrap();
+        std::fs::write(dir.path().join("file1.txt"), "a").unwrap();
+        std::fs::create_dir(dir.path().join("subdir")).unwrap();
+        let entries = read_dir(dir.path().to_str().unwrap()).unwrap();
+        assert!(entries.len() >= 2);
+        assert!(entries.iter().any(|e| e.name == "file1.txt"));
+        assert!(entries.iter().any(|e| e.name == "subdir" && e.is_dir));
+    }
+
+    #[test]
+    fn test_edit_file_replacement() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("edit.txt");
+        std::fs::write(&path, "hello world").unwrap();
+        let result = edit_file(path.to_str().unwrap(), "world", "rust").unwrap();
+        assert!(result);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "hello rust");
+    }
+
+    #[test]
+    fn test_rename_entry() {
+        let dir = TempDir::new().unwrap();
+        let old_path = dir.path().join("old.txt");
+        let new_path = dir.path().join("new.txt");
+        std::fs::write(&old_path, "content").unwrap();
+        rename_entry(old_path.to_str().unwrap(), new_path.to_str().unwrap()).unwrap();
+        assert!(!old_path.exists());
+        assert!(new_path.exists());
+    }
+}

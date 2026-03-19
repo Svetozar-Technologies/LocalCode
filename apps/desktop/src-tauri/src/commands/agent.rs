@@ -44,6 +44,14 @@ pub async fn agent_execute(
                 let model = llm.config.get_anthropic_model();
                 Arc::new(AnthropicProvider::new(&key, &model))
             }
+            "ollama" | "local" => {
+                let server_url = &llm.config.providers.local.server_url;
+                let base_url = format!("{}/v1", server_url);
+                let model = llm.config.providers.local.active_catalog_model
+                    .clone()
+                    .unwrap_or_else(|| "qwen2.5-coder:14b".to_string());
+                Arc::new(OpenAIProvider::with_base_url("ollama", &base_url, &model))
+            }
             _ => llm.local.clone() as Arc<dyn LLMProvider>,
         }
     };
@@ -58,7 +66,7 @@ pub async fn agent_execute(
     let mut registry = ToolRegistry::new();
     builtin::register_all(&mut registry);
 
-    let mut engine = AgentEngine::new(provider, registry);
+    let mut engine = AgentEngine::new(provider.clone(), registry);
 
     // Initialize memory, auto-discovery, and session
     engine.initialize(&project_path);
@@ -104,6 +112,7 @@ pub async fn agent_execute(
         } else {
             Some(current_file)
         },
+        provider: Some(provider.clone()),
     };
 
     let app_clone = app.clone();
@@ -140,5 +149,114 @@ pub async fn agent_execute(
     }
 
     let _ = app.emit("llm-chat-done", serde_json::json!({"id": response_id}));
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn composer_generate(
+    task: String,
+    project_path: String,
+    app: AppHandle,
+    state: tauri::State<'_, LLMManager>,
+) -> Result<(), String> {
+    let provider: Arc<dyn LLMProvider> = {
+        let llm = state.lock().map_err(|e| e.to_string())?;
+        let name = &llm.config.default_provider;
+
+        match name.as_str() {
+            "openai" => {
+                let key = llm.config.get_openai_key();
+                let model = llm.config.get_openai_model();
+                Arc::new(OpenAIProvider::new(&key, &model))
+            }
+            "anthropic" => {
+                let key = llm.config.get_anthropic_key();
+                let model = llm.config.get_anthropic_model();
+                Arc::new(AnthropicProvider::new(&key, &model))
+            }
+            "ollama" | "local" => {
+                let server_url = &llm.config.providers.local.server_url;
+                let base_url = format!("{}/v1", server_url);
+                let model = llm.config.providers.local.active_catalog_model
+                    .clone()
+                    .unwrap_or_else(|| "qwen2.5-coder:14b".to_string());
+                Arc::new(OpenAIProvider::with_base_url("ollama", &base_url, &model))
+            }
+            _ => llm.local.clone() as Arc<dyn LLMProvider>,
+        }
+    };
+
+    let project_path = if project_path.is_empty() {
+        std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string())
+    } else {
+        project_path
+    };
+
+    let mut registry = ToolRegistry::new();
+    builtin::register_all(&mut registry);
+
+    let mut engine = AgentEngine::new(provider.clone(), registry);
+    engine.initialize(&project_path);
+
+    // System prompt for composer mode
+    engine = engine.with_system_prompt(
+        "You are LocalCode Composer, a multi-file code generation assistant. \
+         When given a task, identify the files that need to be created or modified \
+         and make the changes using your tools (write_file, edit_file, create_file). \
+         Work through each file methodically. After each file change, the UI will \
+         show the diff to the user for review.".to_string()
+    );
+    engine.initialize(&project_path);
+
+    let ctx = ToolContext {
+        project_path,
+        current_file: None,
+        provider: Some(provider),
+    };
+
+    let app_clone = app.clone();
+
+    let result = engine
+        .execute(&task, &ctx, &move |event| match event {
+            AgentEvent::Step(step) => {
+                // Emit file changes for the composer UI
+                let step_json = serde_json::to_value(&step).unwrap_or_default();
+                let tool = step_json.get("tool").and_then(|v| v.as_str()).unwrap_or("");
+                let result_str = step_json.get("result").and_then(|v| v.as_str()).unwrap_or("");
+
+                if (tool == "write_file" || tool == "edit_file" || tool == "create_file")
+                    && !result_str.starts_with("Error")
+                {
+                    let _ = app_clone.emit("composer-file-change", &step_json);
+                }
+
+                let _ = app_clone.emit("composer-step", &step_json);
+            }
+            AgentEvent::TextChunk(text) => {
+                let _ = app_clone.emit(
+                    "composer-text",
+                    serde_json::json!({"chunk": text}),
+                );
+            }
+            AgentEvent::Done(_text) => {
+                let _ = app_clone.emit("composer-done", serde_json::json!({}));
+            }
+            AgentEvent::Error(e) => {
+                let _ = app_clone.emit(
+                    "composer-error",
+                    serde_json::json!({"error": e}),
+                );
+            }
+        })
+        .await;
+
+    if let Err(e) = result {
+        let _ = app.emit(
+            "composer-error",
+            serde_json::json!({"error": e.to_string()}),
+        );
+    }
+
+    let _ = app.emit("composer-done", serde_json::json!({}));
     Ok(())
 }
