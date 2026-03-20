@@ -50,13 +50,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}-dmg
-          path: apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+          path: target/${{ matrix.target }}/release/bundle/dmg/*.dmg
 
       - name: Upload .app.tar.gz
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}-app
-          path: apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
+          path: target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
           if-no-files-found: ignore
 
   release:

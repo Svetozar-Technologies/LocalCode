@@ -48,13 +48,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: localcode-linux-deb
-          path: apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+          path: target/release/bundle/deb/*.deb
 
       - name: Upload .AppImage
         uses: actions/upload-artifact@v4
         with:
           name: localcode-linux-appimage
-          path: apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+          path: target/release/bundle/appimage/*.AppImage
 
   release:
     needs: build
