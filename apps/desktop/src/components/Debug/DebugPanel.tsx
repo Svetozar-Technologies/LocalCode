@@ -187,7 +187,7 @@ export default function DebugPanel() {
   const handleStop = useCallback(async () => {
     try {
       await invoke('debug_stop');
-    } catch (_) {}
+    } catch { /* ignored */ }
     setState('idle');
     setOutput((prev) => [...prev, '[Debug] Session ended']);
   }, []);

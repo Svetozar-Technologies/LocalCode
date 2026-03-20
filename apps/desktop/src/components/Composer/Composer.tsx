@@ -4,6 +4,12 @@ import { listen } from '@tauri-apps/api/event';
 import { useAppStore } from '../../stores/appStore';
 import FileChanges from './FileChanges';
 
+interface ComposerStepPayload {
+  tool?: string;
+  result?: string;
+  args?: string | Record<string, string>;
+}
+
 export interface FileChange {
   path: string;
   originalContent: string;
@@ -218,7 +224,7 @@ export default function Composer() {
     setError('');
 
     // Listen for agent step events (file changes come through as tool results)
-    const unlistenStep = await listen<any>('composer-step', (event) => {
+    const unlistenStep = await listen<ComposerStepPayload>('composer-step', (event) => {
       const step = event.payload;
       const tool = step.tool || '';
       const result = step.result || '';

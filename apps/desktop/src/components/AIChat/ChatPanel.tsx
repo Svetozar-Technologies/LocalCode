@@ -5,6 +5,47 @@ import { listen } from '@tauri-apps/api/event';
 import type { AgentStep, FileEntry, ChatMessage, ChatSessionInfo, ChatSearchResult, OpenFile } from '../../types';
 import MentionPopup, { type MentionOption } from './MentionPopup';
 
+interface SpeechRecognitionResultItem {
+  readonly transcript: string;
+  readonly confidence: number;
+}
+
+interface SpeechRecognitionResultEntry {
+  readonly length: number;
+  readonly isFinal: boolean;
+  [index: number]: SpeechRecognitionResultItem;
+}
+
+interface SpeechRecognitionResultList {
+  readonly length: number;
+  [index: number]: SpeechRecognitionResultEntry;
+}
+
+interface SpeechRecognitionEventPayload extends Event {
+  readonly resultIndex: number;
+  readonly results: SpeechRecognitionResultList;
+}
+
+interface SpeechRecognitionInstance extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventPayload) => void) | null;
+  onerror: ((event: Event) => void) | null;
+  onend: (() => void) | null;
+  start(): void;
+  stop(): void;
+}
+
+interface SpeechRecognitionConstructor {
+  new (): SpeechRecognitionInstance;
+}
+
+interface SpeechWindow extends Window {
+  webkitSpeechRecognition?: SpeechRecognitionConstructor;
+  SpeechRecognition?: SpeechRecognitionConstructor;
+}
+
 const LANG_MAP: Record<string, string> = {
   ts: 'typescript', tsx: 'typescriptreact', js: 'javascript', jsx: 'javascriptreact',
   py: 'python', rs: 'rust', go: 'go', java: 'java', c: 'c', cpp: 'cpp', h: 'c',
@@ -170,7 +211,7 @@ export default function ChatPanel() {
   const [showSearch, setShowSearch] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
   // ── Chat Persistence: Initialize session on mount / project change ──
   useEffect(() => {
@@ -363,7 +404,7 @@ export default function ChatPanel() {
       if (step.type === 'tool_call' && step.args) {
         const tool = step.tool || '';
         if (tool === 'write_file' || tool === 'edit_file') {
-          const filePath = (step.args as any).path;
+          const filePath = step.args.path as string;
           if (filePath && !pendingOriginals[filePath]) {
             invoke<string>('read_file', { path: filePath })
               .then((content) => { pendingOriginals[filePath] = content; })
@@ -450,7 +491,7 @@ export default function ChatPanel() {
       case 'git': {
         if (store.projectPath) {
           try {
-            const status = await invoke<any[]>('git_status', { path: store.projectPath });
+            const status = await invoke<{ path: string; status: string }[]>('git_status', { path: store.projectPath });
             const diff = await invoke<string>('git_diff', { path: store.projectPath });
             contextStr = `[Git Status]\n${JSON.stringify(status, null, 2)}\n\n[Git Diff]\n${(diff || '').slice(0, 4000)}`;
           } catch { /* ignore */ }
@@ -698,18 +739,18 @@ export default function ChatPanel() {
       return;
     }
 
-    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-    if (!SpeechRecognition) {
+    const SpeechRecognitionCtor = (window as unknown as SpeechWindow).webkitSpeechRecognition || (window as unknown as SpeechWindow).SpeechRecognition;
+    if (!SpeechRecognitionCtor) {
       console.warn('Speech recognition not supported');
       return;
     }
 
-    const recognition = new SpeechRecognition();
+    const recognition = new SpeechRecognitionCtor();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: SpeechRecognitionEventPayload) => {
       let transcript = '';
       for (let i = event.resultIndex; i < event.results.length; i++) {
         transcript += event.results[i][0].transcript;

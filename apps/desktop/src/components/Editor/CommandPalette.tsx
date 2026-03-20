@@ -1,5 +1,15 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import type { editor } from 'monaco-editor';
 import { useAppStore } from '../../stores/appStore';
+
+interface MonacoWindow extends Window {
+  monaco?: {
+    editor: {
+      getEditors?: () => editor.IStandaloneCodeEditor[];
+      EditorOption: typeof editor.EditorOption;
+    };
+  };
+}
 
 interface Command {
   id: string;
@@ -225,9 +235,9 @@ export default function CommandPalette({ visible, onClose }: CommandPaletteProps
         category: 'Editor',
         action: () => {
           // Toggle via Monaco editor API
-          const editors = (window as any).monaco?.editor?.getEditors?.() || [];
+          const editors = (window as unknown as MonacoWindow).monaco?.editor?.getEditors?.() || [];
           for (const ed of editors) {
-            const current = ed.getOption?.((window as any).monaco.editor.EditorOption.minimap);
+            const current = ed.getOption?.((window as unknown as MonacoWindow).monaco!.editor.EditorOption.minimap);
             ed.updateOptions({ minimap: { enabled: !current?.enabled } });
           }
         },
@@ -237,9 +247,9 @@ export default function CommandPalette({ visible, onClose }: CommandPaletteProps
         label: 'Toggle Word Wrap',
         category: 'Editor',
         action: () => {
-          const editors = (window as any).monaco?.editor?.getEditors?.() || [];
+          const editors = (window as unknown as MonacoWindow).monaco?.editor?.getEditors?.() || [];
           for (const ed of editors) {
-            const current = ed.getOption?.((window as any).monaco.editor.EditorOption.wordWrap);
+            const current = ed.getOption?.((window as unknown as MonacoWindow).monaco!.editor.EditorOption.wordWrap);
             ed.updateOptions({ wordWrap: current === 'on' ? 'off' : 'on' });
           }
         },
@@ -249,7 +259,7 @@ export default function CommandPalette({ visible, onClose }: CommandPaletteProps
         label: 'Format Document',
         category: 'Editor',
         action: () => {
-          const editors = (window as any).monaco?.editor?.getEditors?.() || [];
+          const editors = (window as unknown as MonacoWindow).monaco?.editor?.getEditors?.() || [];
           if (editors[0]) {
             editors[0].getAction('editor.action.formatDocument')?.run();
           }

@@ -19,7 +19,7 @@ jobs:
             os: macos-latest
           - target: x86_64-apple-darwin
             name: LocalCode-darwin-x64
-            os: macos-latest
+            os: macos-13
 
     runs-on: ${{ matrix.os }}
     steps:
