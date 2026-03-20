@@ -278,8 +278,8 @@ export default function TerminalPanel() {
     }
   }, [bottomPanelTab]);
 
-  const errorCount = problems.filter((p) => p.severity === 'error').length;
-  const warningCount = problems.filter((p) => p.severity === 'warning').length;
+  const errorCount = problems.filter((p: DiagnosticProblem) => p.severity === 'error').length;
+  const warningCount = problems.filter((p: DiagnosticProblem) => p.severity === 'warning').length;
 
   return (
     <div className="terminal-panel" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>

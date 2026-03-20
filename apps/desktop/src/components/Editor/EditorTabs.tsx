@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import type { OpenFile } from '../../types';
 import { useAppStore } from '../../stores/appStore';
 
 export default function EditorTabs() {
@@ -59,7 +60,7 @@ export default function EditorTabs() {
 
   return (
     <div className="editor-tabs">
-      {openFiles.map((file) => (
+      {openFiles.map((file: OpenFile) => (
         <div
           key={file.path}
           className={`editor-tab ${activeFile === file.path ? 'active' : ''}`}

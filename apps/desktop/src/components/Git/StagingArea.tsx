@@ -201,8 +201,8 @@ export default function StagingArea({ onRefresh }: StagingAreaProps) {
   const [unstagedExpanded, setUnstagedExpanded] = useState(true);
   const [stagedExpanded, setStagedExpanded] = useState(true);
 
-  const unstagedFiles = gitStatus.filter((f) => !stagedFiles.has(f.path));
-  const staged = gitStatus.filter((f) => stagedFiles.has(f.path));
+  const unstagedFiles = gitStatus.filter((f: GitFileStatus) => !stagedFiles.has(f.path));
+  const staged = gitStatus.filter((f: GitFileStatus) => stagedFiles.has(f.path));
 
   const handleStage = useCallback(
     async (path: string) => {
@@ -241,9 +241,9 @@ export default function StagingArea({ onRefresh }: StagingAreaProps) {
     try {
       await invoke('git_add', {
         path: projectPath,
-        files: unstagedFiles.map((f) => f.path),
+        files: unstagedFiles.map((f: GitFileStatus) => f.path),
       });
-      setStagedFiles(new Set(gitStatus.map((f) => f.path)));
+      setStagedFiles(new Set(gitStatus.map((f: GitFileStatus) => f.path)));
       onRefresh();
     } catch (err) {
       console.error('Failed to stage all:', err);
@@ -255,7 +255,7 @@ export default function StagingArea({ onRefresh }: StagingAreaProps) {
     try {
       await invoke('git_unstage', {
         path: projectPath,
-        files: staged.map((f) => f.path),
+        files: staged.map((f: GitFileStatus) => f.path),
       });
       setStagedFiles(new Set());
       onRefresh();
@@ -331,7 +331,7 @@ export default function StagingArea({ onRefresh }: StagingAreaProps) {
           {staged.length === 0 ? (
             <div style={styles.empty}>No staged changes</div>
           ) : (
-            staged.map((file) => (
+            staged.map((file: GitFileStatus) => (
               <FileItem
                 key={file.path}
                 file={file}
@@ -383,7 +383,7 @@ export default function StagingArea({ onRefresh }: StagingAreaProps) {
           {unstagedFiles.length === 0 ? (
             <div style={styles.empty}>No unstaged changes</div>
           ) : (
-            unstagedFiles.map((file) => (
+            unstagedFiles.map((file: GitFileStatus) => (
               <FileItem
                 key={file.path}
                 file={file}

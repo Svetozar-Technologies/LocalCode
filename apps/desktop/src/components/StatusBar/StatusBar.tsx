@@ -1,13 +1,14 @@
 import { useAppStore } from '../../stores/appStore';
+import type { OpenFile, DiagnosticProblem } from '../../types';
 
 export default function StatusBar() {
   const { activeFile, openFiles, currentBranch, llmConnected, llmConfig, agentMode, problems, setBottomPanelTab, completionStatus, selectedProvider } = useAppStore();
 
-  const currentFile = openFiles.find((f) => f.path === activeFile);
+  const currentFile = openFiles.find((f: OpenFile) => f.path === activeFile);
   const ext = activeFile?.split('.').pop() || '';
 
-  const errorCount = problems.filter((p) => p.severity === 'error').length;
-  const warningCount = problems.filter((p) => p.severity === 'warning').length;
+  const errorCount = problems.filter((p: DiagnosticProblem) => p.severity === 'error').length;
+  const warningCount = problems.filter((p: DiagnosticProblem) => p.severity === 'warning').length;
 
   return (
     <div className="status-bar">

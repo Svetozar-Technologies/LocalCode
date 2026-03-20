@@ -354,7 +354,7 @@ export default function GitPanel() {
               onClick={() => setReviewComments([])}
             >Clear</span>
           </div>
-          {reviewComments.map((c, i) => (
+          {reviewComments.map((c: { file: string; line: number; severity: string; message: string }, i: number) => (
             <div key={i} className="review-comment">
               <span className={`review-severity ${c.severity}`}>
                 {c.severity === 'error' || c.severity === 'critical' ? '!' : c.severity === 'warning' || c.severity === 'suggestion' ? '?' : 'i'}

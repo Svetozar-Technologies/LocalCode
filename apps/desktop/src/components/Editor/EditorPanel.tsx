@@ -1,6 +1,7 @@
 import { useRef, useCallback } from 'react';
 import type { editor } from 'monaco-editor';
 import { invoke } from '@tauri-apps/api/core';
+import type { OpenFile } from '../../types';
 import EditorTabs from './EditorTabs';
 import MonacoEditor from './MonacoEditor';
 import FindReplace from './FindReplace';
@@ -61,7 +62,7 @@ function getRunCommand(filePath: string, projectPath: string | null): string | n
 
 export default function EditorPanel() {
   const { activeFile, openFiles, projectPath, showFindReplace, setShowFindReplace, showBlameView, blameFilePath, splitEditorMode, splitEditorRightPath, markdownPreviewVisible, toggleMarkdownPreview } = useAppStore();
-  const activeFileData = openFiles.find((f) => f.path === activeFile);
+  const activeFileData = openFiles.find((f: OpenFile) => f.path === activeFile);
   const editorInstanceRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 
   const handleEditorMount = useCallback((instance: editor.IStandaloneCodeEditor) => {

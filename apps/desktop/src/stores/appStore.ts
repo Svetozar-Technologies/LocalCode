@@ -185,7 +185,7 @@ interface AppState {
   removeToast: (id: string) => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   // Project
   projectPath: null,
   setProjectPath: (path) => set({ projectPath: path }),
@@ -460,8 +460,8 @@ export const useAppStore = create<AppState>((set) => ({
     set({ setupComplete: complete });
   },
   setShowSetupWizard: (visible) => set({ showSetupWizard: visible }),
-  isLLMConfigured: () => {
-    const state = useAppStore.getState();
+  isLLMConfigured: (): boolean => {
+    const state = get();
     if (state.selectedProvider === 'local') {
       return state.llmConnected || state.llmConfig.modelPath !== '';
     }

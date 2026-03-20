@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { useAppStore } from '../../stores/appStore';
-import type { FileEntry } from '../../types';
+import type { FileEntry, GitFileStatus, OpenFile } from '../../types';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
@@ -200,7 +200,7 @@ function FileTreeItem({ entry, depth, onContextMenu, inlineInput, onInlineSubmit
     }
   };
 
-  const gitEntry = gitStatus.find((g) => entry.path.endsWith(g.path));
+  const gitEntry = gitStatus.find((g: GitFileStatus) => entry.path.endsWith(g.path));
   const gitClass = gitEntry ? `git-${gitEntry.status}` : '';
 
   // Show inline input for new file/folder INSIDE this directory
@@ -620,7 +620,7 @@ export default function FileExplorer() {
       await invoke('delete_entry', { path: deleteTarget.path });
       // Close file if it was open
       const store = useAppStore.getState();
-      if (store.openFiles.find((f) => f.path === deleteTarget.path)) {
+      if (store.openFiles.find((f: OpenFile) => f.path === deleteTarget.path)) {
         store.closeFile(deleteTarget.path);
       }
       await refreshTree();
@@ -708,7 +708,7 @@ export default function FileExplorer() {
             onCancel={handleInlineCancel}
           />
         )}
-        {fileTree.map((entry) => (
+        {fileTree.map((entry: FileEntry) => (
           <FileTreeItem
             key={entry.path}
             entry={entry}

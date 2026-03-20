@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../stores/appStore';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { AgentStep, FileEntry, ChatSessionInfo, ChatSearchResult } from '../../types';
+import type { AgentStep, FileEntry, ChatMessage, ChatSessionInfo, ChatSearchResult, OpenFile } from '../../types';
 import MentionPopup, { type MentionOption } from './MentionPopup';
 
 const LANG_MAP: Record<string, string> = {
@@ -322,7 +322,7 @@ export default function ChatPanel() {
     const unlistenChat = listen<{ id: string; chunk: string }>('llm-chat-chunk', (event) => {
       const { id, chunk } = event.payload;
       const state = useAppStore.getState();
-      const msg = state.chatMessages.find((m) => m.id === id);
+      const msg = state.chatMessages.find((m: ChatMessage) => m.id === id);
       if (msg) {
         updateChatMessage(id, { content: msg.content + chunk });
       }
@@ -335,7 +335,7 @@ export default function ChatPanel() {
     const unlistenAgent = listen<{ id: string; step: AgentStep }>('agent-step', (event) => {
       const { id, step } = event.payload;
       const state = useAppStore.getState();
-      const msg = state.chatMessages.find((m) => m.id === id);
+      const msg = state.chatMessages.find((m: ChatMessage) => m.id === id);
       if (msg) {
         updateChatMessage(id, {
           agentSteps: [...(msg.agentSteps || []), step],
@@ -424,7 +424,7 @@ export default function ChatPanel() {
     switch (option.id) {
       case 'file': {
         const af = store.activeFile;
-        const fileData = af ? store.openFiles.find((f) => f.path === af) : null;
+        const fileData = af ? store.openFiles.find((f: OpenFile) => f.path === af) : null;
         if (fileData) {
           contextStr = `[File: ${fileData.name}]\n\`\`\`\n${fileData.content.slice(0, 6000)}\n\`\`\``;
         }
@@ -533,7 +533,7 @@ export default function ChatPanel() {
 
     // Build context
     const currentFileContent = activeFile
-      ? openFiles.find((f) => f.path === activeFile)?.content || ''
+      ? openFiles.find((f: OpenFile) => f.path === activeFile)?.content || ''
       : '';
 
     let codebaseContext = '';
@@ -600,8 +600,8 @@ export default function ChatPanel() {
         }
 
         const history = chatMessages
-          .filter((m) => m.content.trim())
-          .map((m) => ({
+          .filter((m: ChatMessage) => m.content.trim())
+          .map((m: ChatMessage) => ({
             role: m.role,
             content: m.content.slice(0, 2000),
           }));
@@ -609,7 +609,7 @@ export default function ChatPanel() {
         // Find the original task (last substantial user message before "execute it")
         const isLocal = selectedProvider === 'local' || !selectedProvider;
         const taskMessage = isExecuteRequest
-          ? chatMessages.filter((m) => m.role === 'user' && m.content.trim().length > 20).pop()?.content || trimmed
+          ? chatMessages.filter((m: ChatMessage) => m.role === 'user' && m.content.trim().length > 20).pop()?.content || trimmed
           : isLocal
             ? trimmed  // Local models: just the raw task to save tokens
             : (fullContext ? `${trimmed}\n\nContext:\n${fullContext}` : trimmed);
@@ -627,7 +627,7 @@ export default function ChatPanel() {
         await invoke('llm_chat', {
           responseId: assistantId,
           messages: [
-            ...chatMessages.map((m) => ({
+            ...chatMessages.map((m: ChatMessage) => ({
               role: m.role,
               content: m.content,
             })),
@@ -662,16 +662,16 @@ export default function ChatPanel() {
 
     setAIStreaming(true);
 
-    const lastUserMsg = chatMessages.filter((m) => m.role === 'user').pop();
+    const lastUserMsg = chatMessages.filter((m: ChatMessage) => m.role === 'user').pop();
     const providerName = selectedProvider !== 'local' ? selectedProvider : undefined;
     const currentFileContent = activeFile
-      ? openFiles.find((f) => f.path === activeFile)?.content || ''
+      ? openFiles.find((f: OpenFile) => f.path === activeFile)?.content || ''
       : '';
 
     try {
       const history = chatMessages
-        .filter((m) => m.content.trim())
-        .map((m) => ({ role: m.role, content: m.content.slice(0, 2000) }));
+        .filter((m: ChatMessage) => m.content.trim())
+        .map((m: ChatMessage) => ({ role: m.role, content: m.content.slice(0, 2000) }));
 
       await invoke('agent_execute', {
         responseId: assistantId,
@@ -826,7 +826,7 @@ export default function ChatPanel() {
   const handleRestore = useCallback((cpId: string) => {
     restoreCheckpoint(cpId);
     // Also write restored files back to disk
-    const cp = checkpoints.find((c) => c.id === cpId);
+    const cp = checkpoints.find((c: { id: string; timestamp: number; files: Record<string, string> }) => c.id === cpId);
     if (cp) {
       Object.entries(cp.files).forEach(([path, content]) => {
         invoke('write_file', { path, content }).catch(() => {});
@@ -878,7 +878,7 @@ export default function ChatPanel() {
           onClick={() => setShowSessionSwitcher(!showSessionSwitcher)}
           title="Switch chat session"
         >
-          {chatSessions.find((s) => s.id === activeChatSessionId)?.title || 'New Chat'} ▾
+          {chatSessions.find((s: ChatSessionInfo) => s.id === activeChatSessionId)?.title || 'New Chat'} ▾
         </span>
         <span
           style={{ cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12 }}
@@ -901,7 +901,7 @@ export default function ChatPanel() {
             borderRadius: 4, boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
             maxHeight: 240, overflow: 'auto',
           }}>
-            {chatSessions.map((s) => (
+            {chatSessions.map((s: ChatSessionInfo) => (
               <div
                 key={s.id}
                 onClick={() => switchSession(s.id)}
@@ -994,11 +994,11 @@ export default function ChatPanel() {
             <p style={{ fontSize: 11 }}>Ask questions about your code, get completions, or enable Agent Mode for autonomous tasks.</p>
           </div>
         )}
-        {chatMessages.map((msg) => (
+        {chatMessages.map((msg: ChatMessage) => (
           <div key={msg.id} className={`chat-message ${msg.role}`}>
             <span className="role">{msg.role}</span>
             <div className="body">
-              {msg.agentSteps?.map((step, i) => (
+              {msg.agentSteps?.map((step: AgentStep, i: number) => (
                 <AgentStepView key={i} step={step} />
               ))}
               {msg.content || (isAIStreaming && msg.role === 'assistant' ? '...' : '')}
@@ -1042,7 +1042,7 @@ export default function ChatPanel() {
         {/* Checkpoint restore button (Feature 11) */}
         {checkpoints.length > 0 && !isAIStreaming && (
           <div style={{ padding: '4px 0' }}>
-            {checkpoints.slice(0, 1).map((cp) => (
+            {checkpoints.slice(0, 1).map((cp: { id: string; timestamp: number; files: Record<string, string> }) => (
               <button
                 key={cp.id}
                 onClick={() => handleRestore(cp.id)}

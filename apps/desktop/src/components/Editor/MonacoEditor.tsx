@@ -2,6 +2,7 @@ import { useCallback, useRef, useEffect } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
 import { useAppStore } from '../../stores/appStore';
+import type { OpenFile } from '../../types';
 import { invoke } from '@tauri-apps/api/core';
 import { useInlineCompletion } from '../../hooks/useInlineCompletion';
 import { useNextEditSuggestion } from '../../hooks/useNextEditSuggestion';
@@ -195,7 +196,7 @@ export default function MonacoEditor({ onEditorMount }: MonacoEditorProps = {}) 
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const decorationsRef = useRef<string[]>([]);
 
-  const activeFileData = openFiles.find((f) => f.path === activeFile);
+  const activeFileData = openFiles.find((f: OpenFile) => f.path === activeFile);
   const monacoTheme = THEME_MAP[theme] || 'localcode-dark';
 
   // Wire up inline completion
@@ -232,7 +233,7 @@ export default function MonacoEditor({ onEditorMount }: MonacoEditorProps = {}) 
       const model = editor.getModel();
       if (!model) return;
       const state = useAppStore.getState();
-      const file = state.openFiles.find((f) => f.path === state.activeFile);
+      const file = state.openFiles.find((f: OpenFile) => f.path === state.activeFile);
       if (!file) return;
       try {
         await invoke('write_file', { path: file.path, content: model.getValue() });
