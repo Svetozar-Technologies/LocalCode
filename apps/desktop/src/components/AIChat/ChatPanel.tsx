@@ -958,7 +958,17 @@ export default function ChatPanel() {
 
       <div className="agent-toggle">
         <label>
-          <input type="checkbox" checked={agentMode} onChange={toggleAgentMode} />
+          <input type="checkbox" checked={agentMode} onChange={() => {
+            if (!agentMode) {
+              const store = useAppStore.getState();
+              if (!store.isLLMConfigured()) {
+                store.addToast('Please configure an LLM provider in Settings first', 'error');
+                store.setSidebarView('settings');
+                return;
+              }
+            }
+            toggleAgentMode();
+          }} />
           Agent Mode
           {agentMode && <span className="badge">ON</span>}
         </label>

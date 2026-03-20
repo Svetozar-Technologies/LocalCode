@@ -16,6 +16,7 @@ pub struct ChatHistoryEntry {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn agent_execute(
     response_id: String,
     task: String,

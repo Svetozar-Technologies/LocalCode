@@ -42,7 +42,7 @@ impl AgentRole {
     }
 
     /// Parse role from string
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_role(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "searcher" | "search" => Some(AgentRole::Searcher),
             "coder" | "code" => Some(AgentRole::Coder),

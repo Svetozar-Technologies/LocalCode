@@ -291,7 +291,11 @@ impl Tool for SedTool {
         let global = args["global"].as_bool().unwrap_or(true);
 
         let flags = if global { "g" } else { "" };
-        let cmd = format!("sed -i '' 's/{}/{}/{}' '{}'", pattern, replacement, flags, file);
+        let cmd = if cfg!(target_os = "linux") {
+            format!("sed -i 's/{}/{}/{}' '{}'", pattern, replacement, flags, file)
+        } else {
+            format!("sed -i '' 's/{}/{}/{}' '{}'", pattern, replacement, flags, file)
+        };
 
         let output = run_command(&cmd, &ctx.project_path)?;
 

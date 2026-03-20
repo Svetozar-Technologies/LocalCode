@@ -486,7 +486,7 @@ mod tests {
 
     fn temp_store() -> ChatStore {
         let dir = tempfile::TempDir::new().unwrap();
-        let db_path = dir.into_path().join("test_chat.db");
+        let db_path = dir.keep().join("test_chat.db");
         ChatStore::open(db_path).unwrap()
     }
 
@@ -767,7 +767,7 @@ mod tests {
 
         // Search for original content
         let results1 = store.search_messages("cats dogs", None, 5).unwrap();
-        let score1 = results1
+        let _score1 = results1
             .iter()
             .find(|r| r.message_id == "emb-test")
             .map(|r| r.score)
@@ -820,7 +820,7 @@ mod tests {
         let store = temp_store();
 
         let s1 = store.create_session("/test", "First").unwrap();
-        let s2 = store.create_session("/test", "Second").unwrap();
+        let _s2 = store.create_session("/test", "Second").unwrap();
 
         // Add a message to s1 to update its updated_at
         store

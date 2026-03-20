@@ -14,6 +14,13 @@ pub struct LocalProvider {
     client: Client,
     server_process: Arc<Mutex<Option<Child>>>,
     model_name: Arc<Mutex<String>>,
+    model_path: Arc<Mutex<String>>,
+}
+
+impl Default for LocalProvider {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LocalProvider {
@@ -23,6 +30,7 @@ impl LocalProvider {
             client: Client::new(),
             server_process: Arc::new(Mutex::new(None)),
             model_name: Arc::new(Mutex::new(String::new())),
+            model_path: Arc::new(Mutex::new(String::new())),
         }
     }
 
@@ -32,6 +40,7 @@ impl LocalProvider {
             client: Client::new(),
             server_process: Arc::new(Mutex::new(None)),
             model_name: Arc::new(Mutex::new(String::new())),
+            model_path: Arc::new(Mutex::new(String::new())),
         }
     }
 
@@ -79,9 +88,14 @@ impl LocalProvider {
             .stderr(std::process::Stdio::null())
             .spawn()
             .map_err(|e| {
+                let install_hint = if cfg!(target_os = "linux") {
+                    "Install with: sudo apt install llama.cpp  OR  snap install llama-cpp"
+                } else {
+                    "Install with: brew install llama.cpp"
+                };
                 CoreError::Llm(format!(
-                    "Failed to start llama-server ({}): {}. Install with: brew install llama.cpp",
-                    server_binary, e
+                    "Failed to start llama-server ({}): {}. {}",
+                    server_binary, e, install_hint
                 ))
             })?;
 
@@ -90,6 +104,8 @@ impl LocalProvider {
             *proc = Some(child);
             let mut name = self.model_name.lock().map_err(|e| CoreError::Other(e.to_string()))?;
             *name = model_name.clone();
+            let mut path = self.model_path.lock().map_err(|e| CoreError::Other(e.to_string()))?;
+            *path = model_path.to_string();
         }
 
         // Poll until server is ready — check if process is still alive too
@@ -151,6 +167,8 @@ impl LocalProvider {
         *proc = None;
         let mut name = self.model_name.lock().map_err(|e| CoreError::Other(e.to_string()))?;
         name.clear();
+        let mut path = self.model_path.lock().map_err(|e| CoreError::Other(e.to_string()))?;
+        path.clear();
         Ok(())
     }
 
@@ -161,6 +179,73 @@ impl LocalProvider {
             .get_model_path(catalog_id)
             .ok_or_else(|| CoreError::Llm(format!("Model '{}' not downloaded", catalog_id)))?;
         self.start_server(&path).await
+    }
+
+    /// Check if the llama-server is healthy by hitting its /health endpoint.
+    pub async fn health_check(&self) -> bool {
+        match self
+            .client
+            .get(format!("{}/health", self.server_url))
+            .timeout(tokio::time::Duration::from_secs(3))
+            .send()
+            .await
+        {
+            Ok(resp) => resp.status().is_success(),
+            Err(_) => false,
+        }
+    }
+
+    /// Ensure the server is alive before making a request. If it's dead and we have a
+    /// model loaded, attempt to restart it automatically.
+    async fn ensure_server_alive(&self) -> Result<(), CoreError> {
+        if !self.is_running() {
+            return Ok(()); // No managed server, nothing to check
+        }
+
+        if self.health_check().await {
+            return Ok(());
+        }
+
+        // Server is unresponsive — check if the process died
+        {
+            let mut proc = self.server_process.lock().map_err(|e| CoreError::Other(e.to_string()))?;
+            if let Some(ref mut child) = *proc {
+                match child.try_wait() {
+                    Ok(Some(_)) => {
+                        *proc = None;
+                    }
+                    Ok(None) => {
+                        // Process is alive but unresponsive — kill and restart
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        *proc = None;
+                    }
+                    Err(_) => {
+                        *proc = None;
+                    }
+                }
+            }
+        }
+
+        // Try to auto-restart using the stored model path
+        let stored_path = self.model_path.lock()
+            .map_err(|e| CoreError::Other(e.to_string()))?
+            .clone();
+
+        if stored_path.is_empty() {
+            return Err(CoreError::Llm("LLM server is not responding and no model path is stored for auto-restart".to_string()));
+        }
+
+        if std::path::Path::new(&stored_path).exists() {
+            log::info!("Auto-restarting llama-server with model: {}", stored_path);
+            self.start_server(&stored_path).await?;
+            Ok(())
+        } else {
+            Err(CoreError::Llm(format!(
+                "LLM server crashed. Model file '{}' not found. Please restart manually from Settings.",
+                stored_path
+            )))
+        }
     }
 
     pub fn is_running(&self) -> bool {
@@ -195,6 +280,8 @@ impl LLMProvider for LocalProvider {
         messages: Vec<ChatMessage>,
         opts: ChatOptions,
     ) -> Result<ChatStream, CoreError> {
+        self.ensure_server_alive().await?;
+
         // When tools are present, use non-streaming to properly parse tool calls
         if !opts.tools.is_empty() {
             let response = self.chat_sync(messages, opts).await?;
@@ -274,8 +361,7 @@ impl LLMProvider for LocalProvider {
                             buffer = buffer[pos + 1..].to_string();
 
                             let line = line.trim();
-                            if line.starts_with("data: ") {
-                                let data = &line[6..];
+                            if let Some(data) = line.strip_prefix("data: ") {
                                 if data == "[DONE]" {
                                     let _ = tx.send(Ok(ChatChunk::Done)).await;
                                     return;
@@ -382,6 +468,8 @@ impl LLMProvider for LocalProvider {
         suffix: &str,
         opts: CompletionOptions,
     ) -> Result<String, CoreError> {
+        self.ensure_server_alive().await?;
+
         let body = serde_json::json!({
             "prompt": prompt,
             "suffix": suffix,
@@ -411,6 +499,8 @@ impl LLMProvider for LocalProvider {
         suffix: &str,
         opts: CompletionOptions,
     ) -> Result<ChatStream, CoreError> {
+        self.ensure_server_alive().await?;
+
         let body = serde_json::json!({
             "prompt": prompt,
             "suffix": suffix,
@@ -447,10 +537,10 @@ impl LLMProvider for LocalProvider {
                             buffer = buffer[pos + 1..].to_string();
 
                             let line = line.trim();
-                            if !line.starts_with("data: ") {
-                                continue;
-                            }
-                            let data = &line[6..];
+                            let data = match line.strip_prefix("data: ") {
+                                Some(d) => d,
+                                None => continue,
+                            };
 
                             if let Ok(parsed) =
                                 serde_json::from_str::<serde_json::Value>(data)
@@ -506,22 +596,15 @@ impl LLMProvider for LocalProvider {
 }
 
 /// Determine safe context size and GPU layer count based on model size and available memory.
-/// This prevents OOM kernel panics on macOS by being conservative with Metal GPU memory.
+/// This prevents OOM kernel panics by being conservative with GPU memory.
 fn get_safe_params(model_path: &str) -> (u32, u32) {
     // Get model file size in GB as a rough proxy for memory requirements
     let model_size_gb = std::fs::metadata(model_path)
         .map(|m| m.len() as f64 / (1024.0 * 1024.0 * 1024.0))
         .unwrap_or(4.0);
 
-    // Get total system memory in GB (macOS sysctl)
-    let total_mem_gb = Command::new("sysctl")
-        .arg("-n")
-        .arg("hw.memsize")
-        .output()
-        .ok()
-        .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<u64>().ok())
-        .map(|bytes| bytes as f64 / (1024.0 * 1024.0 * 1024.0))
-        .unwrap_or(8.0);
+    // Get total system memory in GB (platform-specific)
+    let total_mem_gb = get_total_memory_gb();
 
     // Reserve ~4GB for macOS + app overhead, use the rest for the model
     let available_for_model = (total_mem_gb - 4.0).max(2.0);
@@ -549,12 +632,52 @@ fn get_safe_params(model_path: &str) -> (u32, u32) {
     (ctx_size, gpu_layers)
 }
 
+/// Get total system memory in GB using platform-specific methods.
+fn get_total_memory_gb() -> f64 {
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("sysctl")
+            .arg("-n")
+            .arg("hw.memsize")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<u64>().ok())
+            .map(|bytes| bytes as f64 / (1024.0 * 1024.0 * 1024.0))
+            .unwrap_or(8.0)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::fs::read_to_string("/proc/meminfo")
+            .ok()
+            .and_then(|s| {
+                s.lines()
+                    .find(|l| l.starts_with("MemTotal:"))
+                    .and_then(|l| l.split_whitespace().nth(1)?.parse::<u64>().ok())
+                    .map(|kb| kb as f64 / (1024.0 * 1024.0))
+            })
+            .unwrap_or(8.0)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        8.0
+    }
+}
+
 fn which_llama_server() -> String {
-    let candidates = [
-        "llama-server",
-        "/usr/local/bin/llama-server",
-        "/opt/homebrew/bin/llama-server",
-    ];
+    let candidates: Vec<&str> = if cfg!(target_os = "linux") {
+        vec![
+            "llama-server",
+            "/usr/local/bin/llama-server",
+            "/usr/bin/llama-server",
+            "/snap/bin/llama-server",
+        ]
+    } else {
+        vec![
+            "llama-server",
+            "/usr/local/bin/llama-server",
+            "/opt/homebrew/bin/llama-server",
+        ]
+    };
 
     for candidate in &candidates {
         if Command::new(candidate).arg("--version").output().is_ok() {

@@ -202,7 +202,7 @@ impl LspClient {
             },
             "workspaceFolders": [{
                 "uri": root_uri,
-                "name": project_path.split('/').last().unwrap_or("project")
+                "name": project_path.split('/').next_back().unwrap_or("project")
             }]
         }))?;
 

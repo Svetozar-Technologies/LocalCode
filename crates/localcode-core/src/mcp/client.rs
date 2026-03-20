@@ -160,19 +160,17 @@ impl MCPClient {
         if let Some(ref mut stdout) = child.stdout {
             use std::io::BufRead;
             let reader = std::io::BufReader::new(stdout);
-            for line in reader.lines().take(10) {
-                if let Ok(line) = line {
-                    if let Ok(response) = serde_json::from_str::<serde_json::Value>(&line) {
-                        if let Some(result) = response.get("result") {
-                            if let Some(tool_list) = result.get("tools").and_then(|t| t.as_array()) {
-                                for tool in tool_list {
-                                    tools.push(MCPTool {
-                                        name: tool["name"].as_str().unwrap_or("").to_string(),
-                                        description: tool["description"].as_str().unwrap_or("").to_string(),
-                                        input_schema: tool["inputSchema"].clone(),
-                                        server: server_name.to_string(),
-                                    });
-                                }
+            for line in reader.lines().take(10).flatten() {
+                if let Ok(response) = serde_json::from_str::<serde_json::Value>(&line) {
+                    if let Some(result) = response.get("result") {
+                        if let Some(tool_list) = result.get("tools").and_then(|t| t.as_array()) {
+                            for tool in tool_list {
+                                tools.push(MCPTool {
+                                    name: tool["name"].as_str().unwrap_or("").to_string(),
+                                    description: tool["description"].as_str().unwrap_or("").to_string(),
+                                    input_schema: tool["inputSchema"].clone(),
+                                    server: server_name.to_string(),
+                                });
                             }
                         }
                     }

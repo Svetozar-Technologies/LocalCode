@@ -48,6 +48,12 @@ pub struct LspManager {
     project_path: Mutex<Option<String>>,
 }
 
+impl Default for LspManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LspManager {
     pub fn new() -> Self {
         Self {

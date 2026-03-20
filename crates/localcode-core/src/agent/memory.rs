@@ -260,27 +260,27 @@ impl MemoryManager {
             }
         }
 
-        if path.join("Makefile").exists() || path.join("CMakeLists.txt").exists() {
-            if memory.build_system.is_none() {
-                memory.build_system = Some(
-                    if path.join("CMakeLists.txt").exists() {
-                        "CMake"
-                    } else {
-                        "Make"
-                    }
-                    .to_string(),
-                );
-            }
+        if (path.join("Makefile").exists() || path.join("CMakeLists.txt").exists())
+            && memory.build_system.is_none()
+        {
+            memory.build_system = Some(
+                if path.join("CMakeLists.txt").exists() {
+                    "CMake"
+                } else {
+                    "Make"
+                }
+                .to_string(),
+            );
         }
 
         // Detect tauri
-        if path.join("tauri.conf.json").exists() || path.join("src-tauri").exists() {
-            if memory.framework.is_none() || memory.framework.as_deref() == Some("React") {
-                memory.framework = Some(format!(
-                    "Tauri + {}",
-                    memory.framework.as_deref().unwrap_or("React")
-                ));
-            }
+        if (path.join("tauri.conf.json").exists() || path.join("src-tauri").exists())
+            && (memory.framework.is_none() || memory.framework.as_deref() == Some("React"))
+        {
+            memory.framework = Some(format!(
+                "Tauri + {}",
+                memory.framework.as_deref().unwrap_or("React")
+            ));
         }
 
         memory.file_tree_summary = Some(tree_summary);

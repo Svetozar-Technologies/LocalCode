@@ -51,7 +51,7 @@ impl Tool for DispatchSubagentTool {
             .as_str()
             .ok_or_else(|| CoreError::Agent("Missing 'task' parameter".to_string()))?;
 
-        let role = AgentRole::from_str(role_str)
+        let role = AgentRole::parse_role(role_str)
             .ok_or_else(|| CoreError::Agent(format!(
                 "Invalid role '{}'. Must be one of: searcher, coder, reviewer", role_str
             )))?;

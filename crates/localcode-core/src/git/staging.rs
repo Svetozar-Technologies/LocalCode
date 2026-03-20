@@ -57,7 +57,7 @@ pub fn git_unstage(path: &str, files: &[String]) -> CoreResult<()> {
     if let Ok(head) = repo.head() {
         let head_commit = head.peel_to_commit()?;
         let head_tree = head_commit.tree()?;
-        repo.reset_default(Some(head_commit.as_object()), files.iter().map(|f| std::path::Path::new(f)))?;
+        repo.reset_default(Some(head_commit.as_object()), files.iter().map(std::path::Path::new))?;
         let _ = head_tree; // suppress unused warning
     } else {
         let mut index = repo.index()?;

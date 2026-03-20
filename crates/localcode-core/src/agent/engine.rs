@@ -644,10 +644,10 @@ Output ONLY the JSON array."#;
         for (i, step) in steps.iter().enumerate() {
             // Skip conditional steps if no error occurred
             let step_lower = step.to_lowercase();
-            if step_lower.starts_with("if import error") || step_lower.starts_with("if error") {
-                if !completed_steps.last().map_or(false, |s| s.contains("ERROR")) {
-                    continue; // Skip — previous step succeeded
-                }
+            if (step_lower.starts_with("if import error") || step_lower.starts_with("if error"))
+                && !completed_steps.last().is_some_and(|s| s.contains("ERROR"))
+            {
+                continue; // Skip — previous step succeeded
             }
 
             on_event(AgentEvent::Step(AgentStep {

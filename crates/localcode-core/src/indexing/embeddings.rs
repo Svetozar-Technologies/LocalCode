@@ -92,7 +92,7 @@ pub fn bm25_score(
     let mut score: f32 = 0.0;
     for term in &query_terms {
         let tf = *tf_map.get(term.as_str()).unwrap_or(&0) as f32;
-        let df = *doc_freqs.get(term.as_str()).unwrap_or(&0) as usize;
+        let df = *doc_freqs.get(term.as_str()).unwrap_or(&0);
 
         if tf == 0.0 || df == 0 {
             continue;

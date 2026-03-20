@@ -97,11 +97,9 @@ fn has_any_py_files(project_path: &str) -> bool {
         .max_depth(Some(2))
         .build();
 
-    for entry in walker {
-        if let Ok(entry) = entry {
-            if entry.path().extension().and_then(|e| e.to_str()) == Some("py") {
-                return true;
-            }
+    for entry in walker.flatten() {
+        if entry.path().extension().and_then(|e| e.to_str()) == Some("py") {
+            return true;
         }
     }
     false
@@ -144,20 +142,18 @@ fn detect_framework(project_path: &str) -> PythonFramework {
         .max_depth(Some(3))
         .build();
 
-    for entry in walker {
-        if let Ok(entry) = entry {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("py") {
-                if let Ok(content) = std::fs::read_to_string(path) {
-                    if content.contains("from django") || content.contains("import django") {
-                        return PythonFramework::Django;
-                    }
-                    if content.contains("from fastapi") || content.contains("import fastapi") {
-                        return PythonFramework::FastAPI;
-                    }
-                    if content.contains("from flask") || content.contains("import flask") {
-                        return PythonFramework::Flask;
-                    }
+    for entry in walker.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("py") {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                if content.contains("from django") || content.contains("import django") {
+                    return PythonFramework::Django;
+                }
+                if content.contains("from fastapi") || content.contains("import fastapi") {
+                    return PythonFramework::FastAPI;
+                }
+                if content.contains("from flask") || content.contains("import flask") {
+                    return PythonFramework::Flask;
                 }
             }
         }
@@ -203,16 +199,14 @@ fn detect_test_framework(project_path: &str) -> Option<String> {
         .max_depth(Some(3))
         .build();
 
-    for entry in walker {
-        if let Ok(entry) = entry {
-            let name = entry
-                .path()
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
-            if name.starts_with("test_") && name.ends_with(".py") {
-                return Some("pytest".to_string()); // Default assumption
-            }
+    for entry in walker.flatten() {
+        let name = entry
+            .path()
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        if name.starts_with("test_") && name.ends_with(".py") {
+            return Some("pytest".to_string()); // Default assumption
         }
     }
 
@@ -234,7 +228,7 @@ fn detect_python_version(project_path: &str) -> Option<String> {
     if let Ok(content) = std::fs::read_to_string(project.join("pyproject.toml")) {
         for line in content.lines() {
             if line.trim().starts_with("requires-python") {
-                if let Some(version) = line.split('=').last() {
+                if let Some(version) = line.split('=').next_back() {
                     return Some(version.trim().trim_matches('"').to_string());
                 }
             }

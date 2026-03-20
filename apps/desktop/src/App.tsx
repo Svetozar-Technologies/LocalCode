@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import ActivityBar from './components/ActivityBar/ActivityBar';
 import FileExplorer from './components/Sidebar/FileExplorer';
 import SearchPanel from './components/Search/SearchPanel';
@@ -12,6 +12,7 @@ import SettingsPanel from './components/Settings/SettingsPanel';
 import QuickOpen from './components/Editor/QuickOpen';
 import CommandPalette from './components/Editor/CommandPalette';
 import Composer from './components/Composer/Composer';
+import SetupWizard from './components/Settings/SetupWizard';
 import { useAppStore } from './stores/appStore';
 
 function Sidebar() {
@@ -145,8 +146,83 @@ function ResizeHandle({
   );
 }
 
+// --- Error Boundary ---
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  state = { hasError: false, error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          height: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)',
+          fontFamily: 'var(--font-ui)', padding: 32, textAlign: 'center',
+        }}>
+          <h2 style={{ marginBottom: 12 }}>Something went wrong</h2>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: 16, maxWidth: 480 }}>
+            {this.state.error?.message || 'An unexpected error occurred.'}
+          </p>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              window.location.reload();
+            }}
+            style={{
+              padding: '8px 20px', borderRadius: 6, border: 'none',
+              background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontSize: 13,
+            }}
+          >
+            Reload App
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// --- Toast Container ---
+function ToastContainer() {
+  const toasts = useAppStore((s) => s.toasts);
+  const removeToast = useAppStore((s) => s.removeToast);
+
+  if (toasts.length === 0) return null;
+
+  return (
+    <div style={{
+      position: 'fixed', bottom: 32, right: 32, zIndex: 10001,
+      display: 'flex', flexDirection: 'column', gap: 8,
+    }}>
+      {toasts.map((toast) => (
+        <div
+          key={toast.id}
+          onClick={() => removeToast(toast.id)}
+          style={{
+            padding: '10px 16px', borderRadius: 8, fontSize: 13, cursor: 'pointer',
+            maxWidth: 360, boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            background: toast.type === 'error' ? '#c53030' : toast.type === 'success' ? '#2f855a' : 'var(--bg-tertiary)',
+            color: '#fff', border: '1px solid rgba(255,255,255,0.1)',
+            animation: 'fadeIn 0.2s ease-out',
+          }}
+        >
+          {toast.message}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function App() {
   const { terminalVisible, sidebarWidth, setSidebarWidth, terminalHeight, setTerminalHeight, toggleTerminal, chatPanelVisible, chatPanelWidth, setChatPanelWidth } = useAppStore();
+  const setupComplete = useAppStore((s) => s.setupComplete);
+  const setSetupComplete = useAppStore((s) => s.setSetupComplete);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -213,6 +289,10 @@ function App() {
 
   return (
     <div className="app-container">
+      {!setupComplete && (
+        <SetupWizard onComplete={() => setSetupComplete(true)} />
+      )}
+      <ToastContainer />
       <QuickOpen
         visible={quickOpenVisible}
         onClose={() => useAppStore.getState().setQuickOpenVisible(false)}
@@ -267,4 +347,12 @@ function App() {
   );
 }
 
-export default App;
+function AppWithErrorBoundary() {
+  return (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
+}
+
+export default AppWithErrorBoundary;

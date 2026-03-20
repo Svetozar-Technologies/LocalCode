@@ -202,7 +202,7 @@ impl ContextManager {
             summary.push_str("Key points: ");
             for text in &assistant_texts {
                 summary.push_str(&text.chars().take(500).collect::<String>());
-                summary.push_str("\n");
+                summary.push('\n');
             }
         }
 

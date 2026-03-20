@@ -210,6 +210,7 @@ pub async fn llm_complete(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn llm_complete_stream(
     response_id: String,
     prompt: String,

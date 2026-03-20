@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 
 /// API types that plugins can interact with.
 /// These define the host functions available to WASM plugins.
-
 /// Request from plugin to host
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]

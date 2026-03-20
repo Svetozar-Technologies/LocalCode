@@ -32,7 +32,7 @@ pub fn print_header() {
     println!(
         "  {}  {}",
         "│".with(DIM),
-        format!("{}", cwd).with(DIM)
+        cwd.to_string().with(DIM)
     );
     println!(
         "  {}  Type {} for commands, {} to quit",
@@ -181,11 +181,7 @@ pub fn print_markdown(text: &str) {
     for line in text.lines() {
         if line.starts_with("```") {
             in_code_block = !in_code_block;
-            if in_code_block {
-                println!("  {}", "─".repeat(50).with(DIM));
-            } else {
-                println!("  {}", "─".repeat(50).with(DIM));
-            }
+            println!("  {}", "─".repeat(50).with(DIM));
             continue;
         }
 
@@ -194,14 +190,14 @@ pub fn print_markdown(text: &str) {
             continue;
         }
 
-        if line.starts_with("### ") {
-            println!("  {} {}", "▸".with(BRAND), line[4..].bold().with(TEXT));
-        } else if line.starts_with("## ") {
+        if let Some(rest) = line.strip_prefix("### ") {
+            println!("  {} {}", "▸".with(BRAND), rest.bold().with(TEXT));
+        } else if let Some(rest) = line.strip_prefix("## ") {
             println!();
-            println!("  {} {}", "▪".with(BRAND), line[3..].bold().with(TEXT));
-        } else if line.starts_with("# ") {
+            println!("  {} {}", "▪".with(BRAND), rest.bold().with(TEXT));
+        } else if let Some(rest) = line.strip_prefix("# ") {
             println!();
-            println!("  {} {}", "◆".with(BRAND), line[2..].bold().with(TEXT));
+            println!("  {} {}", "◆".with(BRAND), rest.bold().with(TEXT));
         } else if line.starts_with("- ") || line.starts_with("* ") {
             println!("  {} {}", "·".with(DIM), &line[2..]);
         } else if line.starts_with("  - ") || line.starts_with("  * ") {
@@ -306,6 +302,7 @@ pub fn print_sessions_list(sessions: &[(String, u64, String, String)]) {
     println!();
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn print_session_detail(
     id: &str,
     project: &str,

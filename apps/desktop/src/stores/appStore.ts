@@ -171,6 +171,18 @@ interface AppState {
   // Codebase Map (Feature 19)
   codebaseMapVisible: boolean;
   toggleCodebaseMap: () => void;
+
+  // Setup Wizard
+  setupComplete: boolean;
+  showSetupWizard: boolean;
+  setSetupComplete: (complete: boolean) => void;
+  setShowSetupWizard: (visible: boolean) => void;
+  isLLMConfigured: () => boolean;
+
+  // Toast Notifications
+  toasts: Array<{ id: string; message: string; type: 'info' | 'success' | 'error' }>;
+  addToast: (message: string, type?: 'info' | 'success' | 'error') => void;
+  removeToast: (id: string) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -439,6 +451,46 @@ export const useAppStore = create<AppState>((set) => ({
   // Codebase Map
   codebaseMapVisible: false,
   toggleCodebaseMap: () => set((state) => ({ codebaseMapVisible: !state.codebaseMapVisible })),
+
+  // Setup Wizard
+  setupComplete: localStorage.getItem('localcode-setup-complete') === 'true',
+  showSetupWizard: false,
+  setSetupComplete: (complete) => {
+    localStorage.setItem('localcode-setup-complete', String(complete));
+    set({ setupComplete: complete });
+  },
+  setShowSetupWizard: (visible) => set({ showSetupWizard: visible }),
+  isLLMConfigured: () => {
+    const state = useAppStore.getState();
+    if (state.selectedProvider === 'local') {
+      return state.llmConnected || state.llmConfig.modelPath !== '';
+    }
+    // Cloud providers: check if API key is stored in localStorage
+    const providerConfigs = localStorage.getItem('localcode-llm-providers');
+    if (providerConfigs) {
+      try {
+        const providers = JSON.parse(providerConfigs);
+        return providers.some((p: { enabled: boolean; apiKey: string }) => p.enabled && p.apiKey);
+      } catch { /* ignore */ }
+    }
+    return state.llmConnected;
+  },
+
+  // Toast Notifications
+  toasts: [],
+  addToast: (message, type = 'info') => {
+    const id = `toast-${Date.now()}`;
+    set((state) => ({
+      toasts: [...state.toasts, { id, message, type }],
+    }));
+    setTimeout(() => {
+      useAppStore.getState().removeToast(id);
+    }, 4000);
+  },
+  removeToast: (id) =>
+    set((state) => ({
+      toasts: state.toasts.filter((t) => t.id !== id),
+    })),
 }));
 
 function toggleDirRecursive(tree: FileEntry[], path: string): FileEntry[] {

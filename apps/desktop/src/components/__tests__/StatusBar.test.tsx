@@ -1,3 +1,4 @@
+import React from 'react';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import StatusBar from '../StatusBar/StatusBar';
@@ -19,7 +20,7 @@ beforeEach(() => {
 describe('StatusBar', () => {
   it('renders without crashing', () => {
     render(<StatusBar />);
-    expect(screen.getByText('LocalCode v0.2.0')).toBeDefined();
+    expect(screen.getByText('LocalCode v0.4.0')).toBeDefined();
   });
 
   it('shows branch name', () => {
