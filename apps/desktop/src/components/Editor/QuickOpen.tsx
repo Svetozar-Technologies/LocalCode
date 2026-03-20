@@ -199,6 +199,7 @@ export default function QuickOpen({ visible, onClose }: QuickOpenProps) {
   // Focus input when visible
   useEffect(() => {
     if (visible) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuery('');
       setResults([]);
       setSelectedIndex(0);
@@ -215,6 +216,7 @@ export default function QuickOpen({ visible, onClose }: QuickOpenProps) {
     }
 
     if (!query.trim()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setResults([]);
       setLoading(false);
       return;

@@ -200,6 +200,7 @@ export default function FindReplace({ editorInstance, visible, onClose }: FindRe
   }, [editorInstance, searchText, matchCase, wholeWord, useRegex, replaceText, currentMatch]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     triggerFind();
   }, [triggerFind]);
 

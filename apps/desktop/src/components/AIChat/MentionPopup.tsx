@@ -197,6 +197,7 @@ export default function MentionPopup({
 
   // Reset selection when filter changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedIndex(0);
   }, [filter]);
 

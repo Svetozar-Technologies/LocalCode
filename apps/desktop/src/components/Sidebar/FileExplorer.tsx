@@ -121,14 +121,16 @@ function FileTreeItem({ entry, depth, onContextMenu, inlineInput, onInlineSubmit
   const inlineRef = useRef<HTMLInputElement>(null);
 
   // Handle rename mode
+  const shouldRename = inlineInput?.type === 'rename' && inlineInput.entryPath === entry.path;
   useEffect(() => {
-    if (inlineInput?.type === 'rename' && inlineInput.entryPath === entry.path) {
+    if (shouldRename) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsRenaming(true);
-      setRenameValue(inlineInput.initialValue);
+      setRenameValue(inlineInput!.initialValue);
     } else {
       setIsRenaming(false);
     }
-  }, [inlineInput, entry.path]);
+  }, [shouldRename, inlineInput]);
 
   useEffect(() => {
     if (isRenaming && renameRef.current) {

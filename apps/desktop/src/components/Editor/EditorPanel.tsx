@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import type { editor } from 'monaco-editor';
 import { invoke } from '@tauri-apps/api/core';
 import type { OpenFile } from '../../types';
@@ -63,10 +63,12 @@ function getRunCommand(filePath: string, projectPath: string | null): string | n
 export default function EditorPanel() {
   const { activeFile, openFiles, projectPath, showFindReplace, setShowFindReplace, showBlameView, blameFilePath, splitEditorMode, splitEditorRightPath, markdownPreviewVisible, toggleMarkdownPreview } = useAppStore();
   const activeFileData = openFiles.find((f: OpenFile) => f.path === activeFile);
+  const [editorInstance, setEditorInstance] = useState<editor.IStandaloneCodeEditor | null>(null);
   const editorInstanceRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 
   const handleEditorMount = useCallback((instance: editor.IStandaloneCodeEditor) => {
     editorInstanceRef.current = instance;
+    setEditorInstance(instance);
   }, []);
 
   const handleRunFile = useCallback(async () => {
@@ -194,7 +196,7 @@ export default function EditorPanel() {
       <div className="editor-content" style={showMdPreview ? { display: 'flex' } : undefined}>
         <div style={showMdPreview ? { flex: 1, overflow: 'hidden' } : { height: '100%' }}>
           <FindReplace
-            editorInstance={editorInstanceRef.current}
+            editorInstance={editorInstance}
             visible={showFindReplace && !!activeFileData}
             onClose={() => setShowFindReplace(false)}
           />

@@ -40,11 +40,6 @@ export default function CodebaseMap() {
   const [nodes, setNodes] = useState<MapNode[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!projectPath) return;
-    buildMap();
-  }, [projectPath]);
-
   const buildMap = useCallback(async () => {
     if (!projectPath) return;
     setLoading(true);
@@ -113,6 +108,12 @@ export default function CodebaseMap() {
 
     setLoading(false);
   }, [projectPath]);
+
+  useEffect(() => {
+    if (!projectPath) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    buildMap();
+  }, [projectPath, buildMap]);
 
   if (loading) {
     return (

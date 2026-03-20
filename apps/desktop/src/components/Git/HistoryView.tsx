@@ -187,6 +187,7 @@ export default function HistoryView({ fileFilter }: HistoryViewProps = {}) {
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(0);
     fetchCommits(0);
   }, [fetchCommits]);

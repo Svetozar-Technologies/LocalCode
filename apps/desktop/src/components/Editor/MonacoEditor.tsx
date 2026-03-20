@@ -1,4 +1,4 @@
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, useState } from 'react';
 import Editor, { type OnMount, type Monaco } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
 import { useAppStore } from '../../stores/appStore';
@@ -195,21 +195,23 @@ export default function MonacoEditor({ onEditorMount }: MonacoEditorProps = {}) 
   const modelsRef = useRef<Map<string, editor.ITextModel>>(new Map());
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const decorationsRef = useRef<string[]>([]);
+  const [editorInstance, setEditorInstance] = useState<editor.IStandaloneCodeEditor | null>(null);
 
   const activeFileData = openFiles.find((f: OpenFile) => f.path === activeFile);
   const monacoTheme = THEME_MAP[theme] || 'localcode-dark';
 
   // Wire up inline completion
-  useInlineCompletion(editorRef.current);
+  useInlineCompletion(editorInstance);
 
   // Wire up next edit suggestions (Feature 8)
-  useNextEditSuggestion(editorRef.current);
+  useNextEditSuggestion(editorInstance);
 
   // Wire up LSP features (Feature 16)
-  useLspFeatures(editorRef.current);
+  useLspFeatures(editorInstance);
 
   const handleEditorMount: OnMount = useCallback((editor, monaco) => {
     editorRef.current = editor;
+    setEditorInstance(editor);
     registerAllThemes(monaco);
     monaco.editor.setTheme(monacoTheme);
     applyCSS(theme);
@@ -376,7 +378,7 @@ export default function MonacoEditor({ onEditorMount }: MonacoEditorProps = {}) 
 
   return (
     <div style={{ position: 'relative', height: '100%' }}>
-      <InlineEdit editorInstance={editorRef.current} />
+      <InlineEdit editorInstance={editorInstance} />
       {pendingChange && (
         <div style={{
           position: 'absolute',
