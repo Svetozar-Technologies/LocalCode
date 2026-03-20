@@ -23,7 +23,7 @@ export default function StatusBar() {
           className="status-item status-problems-badge"
           onClick={() => {
             setBottomPanelTab('problems');
-            useAppStore.getState().terminalVisible || useAppStore.getState().toggleTerminal();
+            if (!useAppStore.getState().terminalVisible) { useAppStore.getState().toggleTerminal(); }
           }}
           style={{ cursor: 'pointer' }}
           title="Click to open Problems"

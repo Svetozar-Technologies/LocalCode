@@ -144,7 +144,7 @@ export default function TerminalPanel() {
     openFile,
   } = useAppStore();
 
-  const handleOpenFile = useCallback((file: string, _line: number) => {
+  const handleOpenFile = useCallback((file: string) => {
     invoke<string>('read_file', { path: file })
       .then((content) => {
         const name = file.split('/').pop() || file;
@@ -206,7 +206,7 @@ export default function TerminalPanel() {
         rows: xterm.rows,
         cols: xterm.cols,
       });
-    } catch (err) {
+    } catch {
       xterm.writeln('\x1b[33m[LocalCode Terminal]\x1b[0m');
       xterm.writeln('\x1b[90mTerminal backend not available. Using fallback.\x1b[0m');
       xterm.writeln('');
@@ -229,6 +229,7 @@ export default function TerminalPanel() {
       const lines = event.payload.split('\n');
       for (const line of lines) {
         // Strip ANSI codes for parsing
+        // eslint-disable-next-line no-control-regex
         const clean = line.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').trim();
         if (!clean) continue;
 

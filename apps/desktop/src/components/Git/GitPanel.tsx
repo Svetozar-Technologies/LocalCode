@@ -154,36 +154,6 @@ export default function GitPanel() {
     }
   }, [projectPath, refreshStatus]);
 
-  if (!projectPath) {
-    return (
-      <div style={styles.noRepo}>
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="var(--text-muted)">
-          <path d="M21.007 8.222A3.738 3.738 0 0 0 15.045 5.2a3.737 3.737 0 0 0 1.156 6.583 2.988 2.988 0 0 1-2.668 1.67h-2.99a4.456 4.456 0 0 0-2.989 1.165V7.4a3.737 3.737 0 1 0-1.494 0v9.117a3.776 3.776 0 1 0 1.816.099 2.99 2.99 0 0 1 2.668-1.667h2.99a4.484 4.484 0 0 0 4.223-3.039 3.736 3.736 0 0 0 3.25-3.687z" />
-        </svg>
-        <span>Open a folder to use Git</span>
-      </div>
-    );
-  }
-
-  if (!isRepo) {
-    return (
-      <div style={styles.noRepo}>
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="var(--text-muted)">
-          <path d="M21.007 8.222A3.738 3.738 0 0 0 15.045 5.2a3.737 3.737 0 0 0 1.156 6.583 2.988 2.988 0 0 1-2.668 1.67h-2.99a4.456 4.456 0 0 0-2.989 1.165V7.4a3.737 3.737 0 1 0-1.494 0v9.117a3.776 3.776 0 1 0 1.816.099 2.99 2.99 0 0 1 2.668-1.667h2.99a4.484 4.484 0 0 0 4.223-3.039 3.736 3.736 0 0 0 3.25-3.687z" />
-        </svg>
-        <span>This folder is not a Git repository.</span>
-        <button
-          style={styles.initButton}
-          onClick={handleInitRepo}
-          onMouseEnter={(e) => { (e.target as HTMLElement).style.background = '#1a8ad4'; }}
-          onMouseLeave={(e) => { (e.target as HTMLElement).style.background = '#007acc'; }}
-        >
-          Initialize Repository
-        </button>
-      </div>
-    );
-  }
-
   // Feature 15: AI Code Review
   const handleAIReview = useCallback(async () => {
     if (!projectPath || reviewing) return;
@@ -248,6 +218,36 @@ export default function GitPanel() {
       store.setShowBlameView(true);
     }
   }, []);
+
+  if (!projectPath) {
+    return (
+      <div style={styles.noRepo}>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="var(--text-muted)">
+          <path d="M21.007 8.222A3.738 3.738 0 0 0 15.045 5.2a3.737 3.737 0 0 0 1.156 6.583 2.988 2.988 0 0 1-2.668 1.67h-2.99a4.456 4.456 0 0 0-2.989 1.165V7.4a3.737 3.737 0 1 0-1.494 0v9.117a3.776 3.776 0 1 0 1.816.099 2.99 2.99 0 0 1 2.668-1.667h2.99a4.484 4.484 0 0 0 4.223-3.039 3.736 3.736 0 0 0 3.25-3.687z" />
+        </svg>
+        <span>Open a folder to use Git</span>
+      </div>
+    );
+  }
+
+  if (!isRepo) {
+    return (
+      <div style={styles.noRepo}>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="var(--text-muted)">
+          <path d="M21.007 8.222A3.738 3.738 0 0 0 15.045 5.2a3.737 3.737 0 0 0 1.156 6.583 2.988 2.988 0 0 1-2.668 1.67h-2.99a4.456 4.456 0 0 0-2.989 1.165V7.4a3.737 3.737 0 1 0-1.494 0v9.117a3.776 3.776 0 1 0 1.816.099 2.99 2.99 0 0 1 2.668-1.667h2.99a4.484 4.484 0 0 0 4.223-3.039 3.736 3.736 0 0 0 3.25-3.687z" />
+        </svg>
+        <span>This folder is not a Git repository.</span>
+        <button
+          style={styles.initButton}
+          onClick={handleInitRepo}
+          onMouseEnter={(e) => { (e.target as HTMLElement).style.background = '#1a8ad4'; }}
+          onMouseLeave={(e) => { (e.target as HTMLElement).style.background = '#007acc'; }}
+        >
+          Initialize Repository
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.container}>
