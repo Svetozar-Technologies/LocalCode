@@ -1,7 +1,7 @@
 class Localcode < Formula
   desc "AI-powered coding assistant for the terminal"
   homepage "https://github.com/Svetozar-Technologies/LocalCode"
-  version "0.4.1"
+  version "0.4.4"
   license "MIT"
 
   on_macos do
