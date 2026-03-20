@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import type { editor } from 'monaco-editor';
+import type { editor, Position } from 'monaco-editor';
+import type { Monaco } from '@monaco-editor/react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../stores/appStore';
 
@@ -26,7 +27,7 @@ export function useLspFeatures(editorInstance: editor.IStandaloneCodeEditor | nu
   useEffect(() => {
     if (!editorInstance || registeredRef.current) return;
 
-    const monaco = (window as any).monaco;
+    const monaco = (window as unknown as { monaco?: Monaco }).monaco;
     if (!monaco) return;
 
     registeredRef.current = true;
@@ -40,7 +41,7 @@ export function useLspFeatures(editorInstance: editor.IStandaloneCodeEditor | nu
 
       // Hover provider
       monaco.languages.registerHoverProvider(lang, {
-        provideHover: async (model: any, position: any) => {
+        provideHover: async (model: editor.ITextModel, position: Position) => {
           try {
             const filePath = model.uri.path;
             const result = await invoke<string | null>('lsp_hover', {
@@ -64,7 +65,7 @@ export function useLspFeatures(editorInstance: editor.IStandaloneCodeEditor | nu
 
       // Definition provider
       monaco.languages.registerDefinitionProvider(lang, {
-        provideDefinition: async (model: any, position: any) => {
+        provideDefinition: async (model: editor.ITextModel, position: Position) => {
           try {
             const filePath = model.uri.path;
             const result = await invoke<{ uri: string; line: number; character: number } | null>('lsp_definition', {
@@ -92,7 +93,7 @@ export function useLspFeatures(editorInstance: editor.IStandaloneCodeEditor | nu
 
       // References provider
       monaco.languages.registerReferenceProvider(lang, {
-        provideReferences: async (model: any, position: any) => {
+        provideReferences: async (model: editor.ITextModel, position: Position) => {
           try {
             const filePath = model.uri.path;
             const results = await invoke<Array<{ uri: string; line: number; character: number; end_line: number; end_character: number }>>('lsp_references', {

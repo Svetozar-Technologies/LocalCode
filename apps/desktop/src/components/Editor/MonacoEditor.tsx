@@ -1,5 +1,5 @@
 import { useCallback, useRef, useEffect } from 'react';
-import Editor, { type OnMount } from '@monaco-editor/react';
+import Editor, { type OnMount, type Monaco } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
 import { useAppStore } from '../../stores/appStore';
 import type { OpenFile } from '../../types';
@@ -96,7 +96,7 @@ function applyCSS(themeName: string) {
 
 let themesRegistered = false;
 
-function registerAllThemes(monaco: any) {
+function registerAllThemes(monaco: Monaco) {
   if (themesRegistered) return;
   themesRegistered = true;
 
@@ -246,7 +246,7 @@ export default function MonacoEditor({ onEditorMount }: MonacoEditorProps = {}) 
 
   // React to theme changes
   useEffect(() => {
-    const monaco = (window as any).monaco;
+    const monaco = (window as unknown as { monaco?: Monaco }).monaco;
     if (monaco) {
       registerAllThemes(monaco);
       monaco.editor.setTheme(monacoTheme);
@@ -259,7 +259,7 @@ export default function MonacoEditor({ onEditorMount }: MonacoEditorProps = {}) 
     const editor = editorRef.current;
     if (!editor || !activeFileData) return;
 
-    const monaco = (window as any).monaco;
+    const monaco = (window as unknown as { monaco?: Monaco }).monaco;
     if (!monaco) return;
 
     let model = modelsRef.current.get(activeFileData.path) ?? null;
@@ -301,7 +301,7 @@ export default function MonacoEditor({ onEditorMount }: MonacoEditorProps = {}) 
 
   useEffect(() => {
     const ed = editorRef.current;
-    const monaco = (window as any).monaco;
+    const monaco = (window as unknown as { monaco?: Monaco }).monaco;
     if (!ed || !monaco || !activeFile) {
       decorationsRef.current = ed?.deltaDecorations?.(decorationsRef.current, []) || [];
       return;
@@ -315,7 +315,7 @@ export default function MonacoEditor({ onEditorMount }: MonacoEditorProps = {}) 
     // Diff original vs modified to find changed lines
     const origLines = pendingChange.original.split('\n');
     const modLines = pendingChange.modified.split('\n');
-    const decorations: any[] = [];
+    const decorations: editor.IModelDeltaDecoration[] = [];
 
     for (let i = 0; i < modLines.length; i++) {
       if (i >= origLines.length || origLines[i] !== modLines[i]) {

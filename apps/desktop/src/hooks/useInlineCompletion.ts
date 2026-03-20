@@ -2,11 +2,12 @@ import { useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useAppStore } from '../stores/appStore';
-import type { editor } from 'monaco-editor';
+import type { editor, CancellationToken, Position, languages, IDisposable } from 'monaco-editor';
+import type { Monaco } from '@monaco-editor/react';
 
-let completionDisposable: any = null;
-let cursorDisposable: any = null;
-let fileChangeDisposable: any = null;
+let completionDisposable: IDisposable | null = null;
+let cursorDisposable: IDisposable | null = null;
+let fileChangeDisposable: IDisposable | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let abortController: AbortController | null = null;
 
@@ -141,7 +142,7 @@ export function useInlineCompletion(editorInstance: editor.IStandaloneCodeEditor
   useEffect(() => {
     if (!editorInstance) return;
 
-    const monaco = (window as any).monaco;
+    const monaco = (window as unknown as { monaco?: Monaco }).monaco;
     if (!monaco) return;
 
     // Dispose previous providers
@@ -183,9 +184,9 @@ export function useInlineCompletion(editorInstance: editor.IStandaloneCodeEditor
     completionDisposable = monaco.languages.registerInlineCompletionsProvider('*', {
       provideInlineCompletions: async (
         model: editor.ITextModel,
-        position: any,
-        _context: any,
-        token: any
+        position: Position,
+        _context: languages.InlineCompletionContext,
+        token: CancellationToken
       ) => {
         const { llmConnected, selectedProvider } = useAppStore.getState();
         if (!llmConnected) return { items: [] };
@@ -235,7 +236,7 @@ export function useInlineCompletion(editorInstance: editor.IStandaloneCodeEditor
         }
 
         // Debounce 200ms
-        const result = await new Promise<{ items: any[] }>((resolve) => {
+        const result = await new Promise<languages.InlineCompletions>((resolve) => {
           debounceTimer = setTimeout(async () => {
             if (token.isCancellationRequested) {
               resolve({ items: [] });

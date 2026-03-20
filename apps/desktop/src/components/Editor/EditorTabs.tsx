@@ -38,7 +38,7 @@ export default function EditorTabs() {
     const store = useAppStore.getState();
     store.setSidebarView('git');
     // Store the file path to filter history — use a simple approach via URL hash
-    (window as any).__fileHistoryFilter = contextMenu.path;
+    (window as unknown as { __fileHistoryFilter?: string }).__fileHistoryFilter = contextMenu.path;
     setContextMenu(null);
   }, [contextMenu]);
 

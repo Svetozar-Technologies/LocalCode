@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { editor } from 'monaco-editor';
+import type { editor, Selection } from 'monaco-editor';
+import type { Monaco } from '@monaco-editor/react';
 
 interface InlineEditProps {
   editorInstance: editor.IStandaloneCodeEditor | null;
@@ -15,7 +16,7 @@ interface InlineEditState {
   proposedCode: string;
   status: 'idle' | 'loading' | 'preview' | 'error';
   error: string;
-  selectionRange: any | null;
+  selectionRange: Selection | null;
 }
 
 const styles = {
@@ -224,7 +225,7 @@ export default function InlineEdit({ editorInstance }: InlineEditProps) {
   useEffect(() => {
     if (!editorInstance) return;
 
-    const monaco = (window as any).monaco;
+    const monaco = (window as unknown as { monaco?: Monaco }).monaco;
     if (!monaco) return;
 
     editorInstance.addCommand(

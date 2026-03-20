@@ -1,12 +1,13 @@
 import { useEffect, useRef } from 'react';
-import type { editor } from 'monaco-editor';
+import type { editor, IDisposable } from 'monaco-editor';
+import type { Monaco } from '@monaco-editor/react';
 import { invoke } from '@tauri-apps/api/core';
 
 interface SuggestionState {
   decorations: string[];
   suggestedLine: number;
   suggestedText: string;
-  disposable: any | null;
+  disposable: IDisposable | null;
 }
 
 export function useNextEditSuggestion(editorInstance: editor.IStandaloneCodeEditor | null) {
@@ -21,7 +22,7 @@ export function useNextEditSuggestion(editorInstance: editor.IStandaloneCodeEdit
   useEffect(() => {
     if (!editorInstance) return;
 
-    const monaco = (window as any).monaco;
+    const monaco = (window as unknown as { monaco?: Monaco }).monaco;
     if (!monaco) return;
 
     const disposable = editorInstance.onDidChangeModelContent((event) => {

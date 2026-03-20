@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../../stores/appStore';
+import type { GitFileStatus } from '../../types';
 import StagingArea from './StagingArea';
 import CommitView from './CommitView';
 import HistoryView from './HistoryView';
@@ -123,7 +124,7 @@ export default function GitPanel() {
       setGitStatus(
         status.map((s) => ({
           path: s.path,
-          status: s.status as any,
+          status: s.status as GitFileStatus['status'],
         }))
       );
 

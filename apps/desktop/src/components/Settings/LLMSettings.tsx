@@ -455,7 +455,7 @@ function ModelLibrary() {
       setLLMConfig({ modelPath: model.path, modelName: model.name });
       setLLMConnected(true);
       setStartingModel(null);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Failed to start model:', e);
       setModelError(String(e));
       setStartingModel(null);

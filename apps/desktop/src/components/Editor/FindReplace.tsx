@@ -1,6 +1,18 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { editor } from 'monaco-editor';
 
+interface IFindController extends editor.IEditorContribution {
+  start(opts: {
+    searchString: string;
+    isRegex: boolean;
+    matchCase: boolean;
+    wholeWord: boolean;
+    replaceString: string;
+  }): void;
+  moveToNextMatch(): void;
+  moveToPreviousMatch(): void;
+}
+
 interface FindReplaceProps {
   editorInstance: editor.IStandaloneCodeEditor | null;
   visible: boolean;
@@ -128,7 +140,7 @@ export default function FindReplace({ editorInstance, visible, onClose }: FindRe
   const [replaceFocused, setReplaceFocused] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const findControllerRef = useRef<any>(null);
+  const findControllerRef = useRef<IFindController | null>(null);
 
   // Focus search input when visible
   useEffect(() => {
@@ -149,7 +161,7 @@ export default function FindReplace({ editorInstance, visible, onClose }: FindRe
     if (!model) return;
 
     // Use Monaco's built-in find functionality
-    const findController = editorInstance.getContribution('editor.contrib.findController') as any;
+    const findController = editorInstance.getContribution<IFindController>('editor.contrib.findController');
     if (findController) {
       findControllerRef.current = findController;
 
@@ -193,7 +205,7 @@ export default function FindReplace({ editorInstance, visible, onClose }: FindRe
 
   const findNext = useCallback(() => {
     if (!editorInstance) return;
-    const findController = editorInstance.getContribution('editor.contrib.findController') as any;
+    const findController = editorInstance.getContribution<IFindController>('editor.contrib.findController');
     if (findController) {
       findController.moveToNextMatch();
       setCurrentMatch((prev) => (prev >= matchCount ? 1 : prev + 1));
@@ -202,7 +214,7 @@ export default function FindReplace({ editorInstance, visible, onClose }: FindRe
 
   const findPrevious = useCallback(() => {
     if (!editorInstance) return;
-    const findController = editorInstance.getContribution('editor.contrib.findController') as any;
+    const findController = editorInstance.getContribution<IFindController>('editor.contrib.findController');
     if (findController) {
       findController.moveToPreviousMatch();
       setCurrentMatch((prev) => (prev <= 1 ? matchCount : prev - 1));
