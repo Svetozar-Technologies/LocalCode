@@ -48,8 +48,8 @@ jobs:
       - name: Package
         run: |
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/localcode dist/${{ matrix.name }}
-          cd dist && tar czf ${{ matrix.name }}.tar.gz ${{ matrix.name }}
+          cp target/${{ matrix.target }}/release/localcode dist/localcode
+          cd dist && tar czf ${{ matrix.name }}.tar.gz localcode
 
       - name: Upload
         uses: actions/upload-artifact@v4
@@ -69,3 +69,112 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: '*.tar.gz'
+
+  update-homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download release tarballs
+        run: |
+          for name in localcode-darwin-arm64 localcode-darwin-x64 localcode-linux-x64 localcode-linux-arm64; do
+            curl -sL "https://github.com/Svetozar-Technologies/LocalCode/releases/download/v${{ steps.version.outputs.version }}/${name}.tar.gz" -o "${name}.tar.gz"
+          done
+
+      - name: Compute SHA256 checksums
+        id: sha
+        run: |
+          echo "darwin_arm64=$(sha256sum localcode-darwin-arm64.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "darwin_x64=$(sha256sum localcode-darwin-x64.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "linux_x64=$(sha256sum localcode-linux-x64.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "linux_arm64=$(sha256sum localcode-linux-arm64.tar.gz | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: Svetozar-Technologies/homebrew-localcode
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Update formula
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA_DARWIN_ARM64: ${{ steps.sha.outputs.darwin_arm64 }}
+          SHA_DARWIN_X64: ${{ steps.sha.outputs.darwin_x64 }}
+          SHA_LINUX_ARM64: ${{ steps.sha.outputs.linux_arm64 }}
+          SHA_LINUX_X64: ${{ steps.sha.outputs.linux_x64 }}
+        run: |
+          cat > Formula/localcode.rb <<EOF
+          class Localcode < Formula
+            desc "AI-powered coding assistant for the terminal"
+            homepage "https://github.com/Svetozar-Technologies/LocalCode"
+            version "${VERSION}"
+            license "MIT"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/Svetozar-Technologies/LocalCode/releases/download/v#{version}/localcode-darwin-arm64.tar.gz"
+                sha256 "${SHA_DARWIN_ARM64}"
+              end
+              on_intel do
+                url "https://github.com/Svetozar-Technologies/LocalCode/releases/download/v#{version}/localcode-darwin-x64.tar.gz"
+                sha256 "${SHA_DARWIN_X64}"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "https://github.com/Svetozar-Technologies/LocalCode/releases/download/v#{version}/localcode-linux-arm64.tar.gz"
+                sha256 "${SHA_LINUX_ARM64}"
+              end
+              on_intel do
+                url "https://github.com/Svetozar-Technologies/LocalCode/releases/download/v#{version}/localcode-linux-x64.tar.gz"
+                sha256 "${SHA_LINUX_X64}"
+              end
+            end
+
+            def install
+              bin.install "localcode"
+            end
+
+            test do
+              assert_match "LocalCode", shell_output("#{bin}/localcode --version")
+            end
+          end
+          EOF
+          sed -i 's/^          //' Formula/localcode.rb
+
+      - name: Push updated formula
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/localcode.rb
+          git commit -m "Update LocalCode to ${{ steps.version.outputs.version }}"
+          git push
+
+  publish-npm:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Update package version
+        working-directory: apps/cli-wrapper
+        run: npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
+
+      - name: Publish to npm
+        working-directory: apps/cli-wrapper
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

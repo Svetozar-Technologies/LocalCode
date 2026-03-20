@@ -4,6 +4,19 @@ A terminal-based AI coding assistant with autonomous agent capabilities.
 
 ## Installation
 
+### Homebrew (macOS/Linux)
+
+```bash
+brew tap svetozar-technologies/localcode
+brew install localcode
+```
+
+### npm (macOS/Linux)
+
+```bash
+npm install -g localcode-cli
+```
+
 ### From Source
 
 ```bash
@@ -16,7 +29,6 @@ cargo install --path crates/localcode-cli
 
 ```bash
 localcode --version
-# localcode 0.2.0
 ```
 
 ## Quick Start

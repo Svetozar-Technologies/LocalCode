@@ -119,6 +119,13 @@ cargo tauri build    # Production build (.app + .dmg)
 
 #### Install
 ```bash
+# Homebrew (macOS/Linux)
+brew tap svetozar-technologies/localcode
+brew install localcode
+
+# npm (macOS/Linux)
+npm install -g localcode-cli
+
 # From source
 git clone https://github.com/Svetozar-Technologies/LocalCode.git
 cd LocalCode
