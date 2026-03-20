@@ -257,6 +257,7 @@ export default function ChatPanel() {
       }
     };
     initSession();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectPath]);
 
   // ── Persist messages fire-and-forget ──
@@ -289,6 +290,7 @@ export default function ChatPanel() {
         persistMessageUpdate(lastMsg.id, lastMsg.content, lastMsg.agentSteps);
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAIStreaming]);
 
   // ── Switch session ──

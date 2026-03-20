@@ -118,6 +118,7 @@ export function useLspFeatures(editorInstance: editor.IStandaloneCodeEditor | nu
   }, [editorInstance]);
 
   // Auto-start LSP when file is opened
+  const activeFile = useAppStore.getState().activeFile;
   useEffect(() => {
     if (!editorInstance) return;
 
@@ -134,5 +135,5 @@ export function useLspFeatures(editorInstance: editor.IStandaloneCodeEditor | nu
     invoke('lsp_start', { projectPath, language: lspLang }).catch(() => {
       // LSP server not installed — silent failure
     });
-  }, [editorInstance, useAppStore.getState().activeFile]);
+  }, [editorInstance, activeFile]);
 }

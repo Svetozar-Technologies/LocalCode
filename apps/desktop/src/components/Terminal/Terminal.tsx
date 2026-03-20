@@ -270,7 +270,7 @@ export default function TerminalPanel() {
     return () => {
       observer.disconnect();
     };
-  }, [initTerminal]);
+  }, [initTerminal, bottomPanelTab]);
 
   // Re-fit terminal when switching back to terminal tab
   useEffect(() => {

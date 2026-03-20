@@ -144,12 +144,13 @@ If no edit is needed, respond with: NONE`;
       },
     );
 
+    const currentState = stateRef.current;
+
     return () => {
       disposable.dispose();
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      const state = stateRef.current;
-      if (state.decorations.length > 0) {
-        editorInstance.deltaDecorations(state.decorations, []);
+      if (currentState.decorations.length > 0) {
+        editorInstance.deltaDecorations(currentState.decorations, []);
       }
     };
   }, [editorInstance]);
