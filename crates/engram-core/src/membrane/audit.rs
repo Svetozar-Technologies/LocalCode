@@ -1,11 +1,11 @@
+//! Audit trail for cross-agent memory access.
+//!
+//! Records every cross-agent access for security review and debugging.
+
 use crate::memory::types::*;
 use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
 use std::collections::VecDeque;
-
-/// Audit trail for cross-agent memory access.
-///
-/// Records every cross-agent access for security review and debugging.
 
 #[derive(Clone, Debug)]
 pub struct AuditEntry {

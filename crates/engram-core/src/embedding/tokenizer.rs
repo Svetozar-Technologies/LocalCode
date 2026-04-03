@@ -1,7 +1,7 @@
-/// Simple whitespace tokenizer for keyword extraction.
-///
-/// For production use with ONNX MiniLM, this would be replaced
-/// with the HuggingFace tokenizers library for WordPiece tokenization.
+//! Simple whitespace tokenizer for keyword extraction.
+//!
+//! For production use with ONNX MiniLM, this would be replaced
+//! with the HuggingFace tokenizers library for WordPiece tokenization.
 
 /// Tokenize text for keyword matching (lowercased, stopwords removed)
 pub fn tokenize_keywords(text: &str) -> Vec<String> {

@@ -1,11 +1,11 @@
+//! DBSCAN-inspired clustering for episodic memory consolidation.
+//!
+//! Groups similar episodic memories together so they can be
+//! consolidated into semantic facts.
+
 use crate::memory::types::*;
 use crate::storage::hnsw::cosine_similarity;
 use std::collections::HashMap;
-
-/// DBSCAN-inspired clustering for episodic memory consolidation.
-///
-/// Groups similar episodic memories together so they can be
-/// consolidated into semantic facts.
 
 /// Cluster episodic memories by embedding similarity
 pub fn cluster_by_similarity(

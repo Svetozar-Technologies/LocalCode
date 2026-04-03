@@ -1,10 +1,10 @@
-use crate::memory::types::*;
+//! Memory summarization and compression triggers.
+//!
+//! When a cluster of episodic memories has been consolidated into
+//! a semantic fact, the original episodic memories can be compressed
+//! (archived) to save space.
 
-/// Memory summarization and compression triggers.
-///
-/// When a cluster of episodic memories has been consolidated into
-/// a semantic fact, the original episodic memories can be compressed
-/// (archived) to save space.
+use crate::memory::types::*;
 
 /// Determine if a memory should be compressed/archived
 pub fn should_compress(memory: &MemoryNode, has_been_consolidated: bool) -> bool {

@@ -1,12 +1,12 @@
+//! BM25-inspired keyword matching for full-text search.
+//!
+//! Provides lexical matching as a complement to vector similarity,
+//! catching exact keyword matches that embeddings might miss.
+
 use crate::memory::types::*;
 use std::collections::HashMap;
 use std::io::{Read as IoRead, Write as IoWrite};
 use std::path::Path;
-
-/// BM25-inspired keyword matching for full-text search.
-///
-/// Provides lexical matching as a complement to vector similarity,
-/// catching exact keyword matches that embeddings might miss.
 
 /// BM25 parameters
 const K1: f32 = 1.2;

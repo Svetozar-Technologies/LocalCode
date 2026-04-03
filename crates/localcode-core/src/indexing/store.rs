@@ -123,7 +123,7 @@ impl CodeIndex {
 
         // Use HNSW for fast approximate vector search if available
         if let Some(ref hnsw) = self.hnsw {
-            if let Ok(_) = hnsw.search(&query_embedding, top_k * 2) {
+            if hnsw.search(&query_embedding, top_k * 2).is_ok() {
                 // HNSW returns nearest neighbors by vector; now combine with BM25
                 if self.doc_count > 0 && !self.term_doc_freqs.is_empty() {
                     return self.hybrid_search_ranked(query, &query_embedding, top_k);

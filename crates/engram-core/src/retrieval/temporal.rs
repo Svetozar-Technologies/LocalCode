@@ -1,10 +1,10 @@
+//! Temporal relevance scoring.
+//!
+//! More recent memories score higher. Uses an exponential decay
+//! with a configurable half-life.
+
 use crate::memory::types::*;
 use chrono::{DateTime, Utc};
-
-/// Temporal relevance scoring.
-///
-/// More recent memories score higher. Uses an exponential decay
-/// with a configurable half-life.
 
 /// Default half-life in hours (24 hours)
 const DEFAULT_HALF_LIFE_HOURS: f64 = 24.0;

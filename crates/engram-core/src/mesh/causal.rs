@@ -1,11 +1,11 @@
+//! Causal chain tracking and analysis.
+//!
+//! Traces cause-and-effect relationships between memories,
+//! enabling agents to understand "why did this happen?" by
+//! following causal links backward.
+
 use crate::memory::types::*;
 use crate::mesh::graph::CognitiveGraph;
-
-/// Causal chain tracking and analysis.
-///
-/// Traces cause-and-effect relationships between memories,
-/// enabling agents to understand "why did this happen?" by
-/// following causal links backward.
 
 /// Trace the causal chain backward from an effect to its root cause(s)
 pub fn trace_causes(graph: &CognitiveGraph, effect: &MemoryId, max_depth: usize) -> Vec<Vec<MemoryId>> {

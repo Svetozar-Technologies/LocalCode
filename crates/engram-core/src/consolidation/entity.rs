@@ -235,10 +235,10 @@ fn extract_date_patterns(text: &str) -> Vec<CompactString> {
     // ISO date pattern: YYYY-MM-DD
     for word in text.split_whitespace() {
         let clean = word.trim_matches(|c: char| !c.is_alphanumeric() && c != '-');
-        if clean.len() == 10 && clean.chars().filter(|c| *c == '-').count() == 2 {
-            if clean[..4].chars().all(|c| c.is_ascii_digit()) {
-                dates.push(clean.into());
-            }
+        if clean.len() == 10 && clean.chars().filter(|c| *c == '-').count() == 2
+            && clean[..4].chars().all(|c| c.is_ascii_digit())
+        {
+            dates.push(clean.into());
         }
     }
 

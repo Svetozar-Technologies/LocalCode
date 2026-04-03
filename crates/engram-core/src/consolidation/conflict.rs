@@ -1,12 +1,12 @@
+//! Contradiction detection and resolution.
+//!
+//! When new semantic facts are extracted, they may conflict with
+//! existing knowledge. This module detects and resolves such conflicts.
+
 use crate::memory::types::*;
 use crate::mesh::graph::CognitiveGraph;
 use crate::storage::hnsw::cosine_similarity;
 use chrono::Utc;
-
-/// Contradiction detection and resolution.
-///
-/// When new semantic facts are extracted, they may conflict with
-/// existing knowledge. This module detects and resolves such conflicts.
 
 /// Result of conflict detection
 #[derive(Debug)]

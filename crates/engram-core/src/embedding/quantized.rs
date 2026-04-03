@@ -1,10 +1,10 @@
-/// Int8 quantized model utilities.
-///
-/// Placeholder for ONNX Runtime integration with quantized MiniLM.
-/// In production, this handles:
-/// - Model download and caching
-/// - Int8 quantization verification
-/// - Runtime optimization settings
+//! Int8 quantized model utilities.
+//!
+//! Placeholder for ONNX Runtime integration with quantized MiniLM.
+//! In production, this handles:
+//! - Model download and caching
+//! - Int8 quantization verification
+//! - Runtime optimization settings
 
 use std::path::{Path, PathBuf};
 

@@ -1,6 +1,6 @@
-use crate::memory::types::*;
+//! Predefined access control policies for common scenarios.
 
-/// Predefined access control policies for common scenarios.
+use crate::memory::types::*;
 
 /// Create a fully open policy — all memories visible to all agents
 pub fn open_policy() -> PermeabilityPolicy {

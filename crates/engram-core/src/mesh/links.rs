@@ -1,10 +1,10 @@
+//! Cross-memory-type edge creation utilities.
+//!
+//! Provides helper functions for creating semantically meaningful
+//! links between memories of different types.
+
 use crate::memory::types::*;
 use crate::mesh::graph::CognitiveGraph;
-
-/// Cross-memory-type edge creation utilities.
-///
-/// Provides helper functions for creating semantically meaningful
-/// links between memories of different types.
 
 /// Link an episodic memory to a semantic fact it supports
 pub fn link_evidence(graph: &CognitiveGraph, episodic: MemoryId, semantic: MemoryId) {

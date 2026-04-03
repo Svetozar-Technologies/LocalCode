@@ -6,21 +6,12 @@
 use crate::memory::types::EngramResult;
 
 /// Encryption configuration
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct EncryptionConfig {
     /// Whether encryption is enabled
     pub enabled: bool,
     /// Key derivation salt (should be unique per install)
     pub salt: [u8; 16],
-}
-
-impl Default for EncryptionConfig {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            salt: [0u8; 16],
-        }
-    }
 }
 
 /// Encrypt a payload using AES-256-GCM

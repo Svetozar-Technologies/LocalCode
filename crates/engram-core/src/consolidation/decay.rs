@@ -1,12 +1,12 @@
+//! Ebbinghaus forgetting curve implementation with spaced repetition.
+//!
+//! Memories naturally decay over time. When retrieved, their stability
+//! increases (spaced repetition effect). Memories below the archive
+//! threshold are moved to cold storage.
+
 use crate::memory::types::*;
 use crate::storage::engine::StorageEngine;
 use chrono::Utc;
-
-/// Ebbinghaus forgetting curve implementation with spaced repetition.
-///
-/// Memories naturally decay over time. When retrieved, their stability
-/// increases (spaced repetition effect). Memories below the archive
-/// threshold are moved to cold storage.
 
 /// Process decay for all memories, returning IDs that should be archived
 pub fn process_decay(storage: &StorageEngine) -> Vec<MemoryId> {

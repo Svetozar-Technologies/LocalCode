@@ -30,10 +30,7 @@ impl CognitiveGraph {
     /// Ensure a node exists in the graph
     pub fn add_node(&self, id: MemoryId) {
         let mut map = self.node_map.write();
-        if !map.contains_key(&id) {
-            let idx = self.graph.write().add_node(id);
-            map.insert(id, idx);
-        }
+        map.entry(id).or_insert_with(|| self.graph.write().add_node(id));
     }
 
     /// Add a directed edge between two memories
