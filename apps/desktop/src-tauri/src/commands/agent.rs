@@ -1,4 +1,4 @@
-use localcode_core::agent::{AgentEngine, AgentEvent, ToolRegistry, ToolContext};
+use localcode_core::agent::{AgentEngine, AgentEvent, ToolRegistry};
 use localcode_core::agent::builtin;
 use localcode_core::llm::openai::OpenAIProvider;
 use localcode_core::llm::anthropic::AnthropicProvider;
@@ -124,15 +124,10 @@ pub async fn agent_execute(
         task
     };
 
-    let ctx = ToolContext {
-        project_path,
-        current_file: if current_file.is_empty() {
-            None
-        } else {
-            Some(current_file)
-        },
-        provider: Some(provider.clone()),
-    };
+    let mut ctx = engine.create_tool_context(project_path, Some(provider.clone()));
+    if !current_file.is_empty() {
+        ctx.current_file = Some(current_file);
+    }
 
     let app_clone = app.clone();
     let rid = response_id.clone();
@@ -233,11 +228,7 @@ pub async fn composer_generate(
     );
     engine.initialize(&project_path);
 
-    let ctx = ToolContext {
-        project_path,
-        current_file: None,
-        provider: Some(provider),
-    };
+    let ctx = engine.create_tool_context(project_path, Some(provider));
 
     let app_clone = app.clone();
 

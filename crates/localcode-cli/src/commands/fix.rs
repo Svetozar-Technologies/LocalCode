@@ -46,6 +46,8 @@ pub async fn run_fix(
         project_path: cwd,
         current_file: None,
         provider: Some(provider),
+        engram: None,
+        engram_agent_id: None,
     };
 
     let task = format!(

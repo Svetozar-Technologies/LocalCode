@@ -1,7 +1,7 @@
 <p align="center">
   <h1 align="center">LocalCode</h1>
   <p align="center">
-    <strong>Privacy-first AI code editor with autonomous agent capabilities</strong>
+    <strong>Privacy-first AI code editor with cognitive memory and autonomous agent capabilities</strong>
   </p>
   <p align="center">
     <a href="#features">Features</a> &middot;
@@ -15,7 +15,9 @@
 
 ---
 
-LocalCode is an open-source desktop IDE and CLI with built-in AI coding assistance. It runs entirely on your machine — no cloud, no telemetry, no data leaves your device.
+LocalCode is an open-source desktop IDE and CLI with built-in AI coding assistance and a **cognitive memory system**. It runs entirely on your machine — no cloud, no telemetry, no data leaves your device.
+
+Powered by **Engram** — a Rust-native cognitive memory engine with hybrid retrieval (HNSW vector + BM25 + temporal + graph), multi-agent namespace isolation, and ONNX neural embeddings. Your AI agent remembers across sessions, learns your codebase, and builds context over time.
 
 Supports **local models** (via [Ollama](https://ollama.com/) or [llama.cpp](https://github.com/ggerganov/llama.cpp)), **OpenAI**, and **Anthropic** as LLM providers. Switch between them freely.
 
@@ -72,7 +74,7 @@ The agent can autonomously plan, investigate, and execute complex coding tasks u
 | **Search** | `search_files`, `search_content`, `glob`, `codebase_search`, `grep_search`, `find_files` | Find files by name, search content with regex, semantic code search with RAG |
 | **Git** | `git_status`, `git_diff`, `git_commit`, `git_log` | Full git workflow without leaving the agent |
 | **Commands** | `run_command`, `http_request`, `sed_replace`, `count_lines` | Shell commands, HTTP requests, text replacement, line counting |
-| **Memory** | `update_memory`, `codebase_search` | Persistent memory across sessions, semantic code search |
+| **Memory** | `update_memory`, `recall_memory`, `forget_memory`, `codebase_search` | Cognitive memory (Engram) — store, recall, and forget across sessions |
 | **Multi-Agent** | `dispatch_subagent` | Spawn specialized sub-agents (Searcher, Coder, Reviewer) |
 
 ### IDE Features
@@ -305,25 +307,52 @@ Every session is stored permanently and searchable by keyword:
 - Auto-generated titles from tasks and tags from file extensions + keywords
 - Persists across restarts — search "the game we built last week" and find it
 
-### Memory System
+### Cognitive Memory System (Engram)
 
-LocalCode maintains persistent memory across sessions:
+LocalCode v0.5.0 introduces **Engram**, a Rust-native cognitive memory engine that gives your AI agent true persistent memory:
 
-- **Project Memory** — auto-discovers framework, language, build system, conventions
-- **Global Memory** — shared facts across all projects
-- **Session History** — tracks modified files and completed tasks (all sessions, not just last 10)
-- **Codebase Index** — semantic search with hybrid BM25 + cosine similarity
+**Memory Types:**
+- **Episodic** — what happened (conversations, tasks, errors encountered)
+- **Semantic** — what's known (facts, conventions, architecture decisions)
+- **Procedural** — how to do things (workflows, build steps, deployment patterns)
+- **Prospective** — trigger-based reminders (fire when context matches)
+- **Working** — short-lived buffer with TTL (active task context)
 
-Memory is stored in `.localcode/memory/` (per-project) and `~/.localcode/memory/` (global).
+**Hybrid Retrieval (5 signals):**
+- **Vector search** — HNSW index with ONNX neural embeddings (all-MiniLM-L6-v2, 384-dim)
+- **Keyword search** — BM25 with precomputed TF for sub-microsecond queries
+- **Temporal scoring** — recency-weighted with configurable half-life decay
+- **Graph scoring** — cognitive mesh with 7 link types (Causal, Refines, Contradicts, etc.)
+- **Strength scoring** — memory reinforcement and decay based on access patterns
+
+**Multi-Agent Architecture:**
+- Namespace isolation — each agent's memories are private by default
+- Permeability membrane — controlled cross-agent memory sharing with audit logging
+- Entity resolution — automatic linking of related memories across agents
+
+**Performance (M-series Mac):**
+| Operation | 100 memories | 1K memories | 10K memories |
+|-----------|-------------|-------------|--------------|
+| Recall | 202us | 592us | 2.3ms |
+| HNSW search | 100us | 463us | 799us |
+| BM25 search | 2.3us | 22us | 275us |
+| Store | 3.0ms | 3.0ms | 3.0ms |
+
+**Agent Memory Tools:**
+- `update_memory` — store facts, conventions, and context into Engram
+- `recall_memory` — semantic search across all stored memories
+- `forget_memory` — remove outdated or incorrect memories
+
+Memory is stored at `~/.localcode/engram/` and persists across sessions. The agent automatically recalls relevant context from previous conversations when working on related tasks.
 
 ### Semantic Code Search (RAG)
 
 The `codebase_search` tool uses a hybrid retrieval pipeline:
 
 1. **Chunking** — Code is split into semantic chunks (up to 80 lines) with function signature extraction
-2. **Embedding** — 256-dimension vectors using bigram hashing
+2. **Embedding** — HNSW vector index with ONNX neural embeddings (384-dim, all-MiniLM-L6-v2) with hash fallback
 3. **BM25 Scoring** — Term frequency-inverse document frequency for keyword relevance
-4. **Hybrid Ranking** — 40% cosine similarity + 60% BM25 for best-of-both-worlds retrieval
+4. **Hybrid Ranking** — Cosine similarity + BM25 for best-of-both-worlds retrieval
 5. **Auto-Indexing** — Index is built automatically and cached (refreshed every 5 minutes)
 
 ---
@@ -414,17 +443,16 @@ auto_approve_commands = false
 │  │  + Git      │ │  Process    │ │  ┌─────────────────┐   │  │
 │  │  (libgit2)  │ │             │ │  │  Agent Engine    │   │  │
 │  └─────────────┘ └─────────────┘ │  │  25+ Tools       │   │  │
-│                                  │  │  Memory System   │   │  │
-│  ┌──────────────────────────┐    │  │  RAG Pipeline    │   │  │
-│  │     LLM Providers        │    │  │  Multi-Agent     │   │  │
-│  │  ┌───────┐ ┌──────────┐  │    │  └─────────────────┘   │  │
-│  │  │Ollama │ │ llama.cpp│  │    └────────────────────────┘  │
-│  │  │       │ │ (Metal)  │  │                                │
-│  │  └───────┘ └──────────┘  │                                │
-│  │  ┌───────┐ ┌──────────┐  │                                │
-│  │  │OpenAI │ │Anthropic │  │                                │
-│  │  └───────┘ └──────────┘  │                                │
-│  └──────────────────────────┘                                │
+│                                  │  │  RAG Pipeline    │   │  │
+│  ┌──────────────────────────┐    │  │  Multi-Agent     │   │  │
+│  │     LLM Providers        │    │  └─────────────────┘   │  │
+│  │  ┌───────┐ ┌──────────┐  │    │  ┌─────────────────┐   │  │
+│  │  │Ollama │ │ llama.cpp│  │    │  │  Engram Memory   │   │  │
+│  │  └───────┘ └──────────┘  │    │  │  HNSW + BM25     │   │  │
+│  │  ┌───────┐ ┌──────────┐  │    │  │  Cognitive Graph  │   │  │
+│  │  │OpenAI │ │Anthropic │  │    │  │  ONNX Embeddings │   │  │
+│  │  └───────┘ └──────────┘  │    │  └─────────────────┘   │  │
+│  └──────────────────────────┘    └────────────────────────┘  │
 └───────────────────────────────────────────────────────────────┘
 
 ┌───────────────────────────────────────────────────────────────┐
@@ -455,9 +483,19 @@ LocalCode/
 │       └── src-tauri/        # Rust backend (Tauri commands)
 │           └── src/commands/ # IPC command handlers
 ├── crates/
+│   ├── engram-core/          # Cognitive memory engine
+│   │   └── src/
+│   │       ├── memory/       # 5 memory types (episodic, semantic, procedural, prospective, working)
+│   │       ├── storage/      # WAL, BTree, HNSW index, mmap, encryption
+│   │       ├── embedding/    # ONNX engine (all-MiniLM-L6-v2, 384-dim) + hash fallback
+│   │       ├── retrieval/    # Hybrid (vector + BM25 + temporal + graph), caching
+│   │       ├── mesh/         # Cognitive graph (7 link types, causal analysis)
+│   │       ├── consolidation/# Clustering, decay, entity resolution, reflection
+│   │       ├── membrane/     # Namespace isolation, permeability, audit
+│   │       └── scoring/      # Composite scoring (importance, recency, relevance)
 │   ├── localcode-core/       # Shared core library
 │   │   └── src/
-│   │       ├── agent/        # Agent engine, tools, memory, subagents
+│   │       ├── agent/        # Agent engine, tools, cognitive memory bridge, subagents
 │   │       ├── llm/          # LLM providers (OpenAI, Anthropic, local)
 │   │       ├── indexing/     # RAG pipeline (chunker, embeddings, search)
 │   │       ├── git/          # Git operations (status, diff, blame, etc.)
@@ -486,6 +524,7 @@ LocalCode/
 | Terminal | xterm.js + portable-pty |
 | AI Inference | Ollama / llama.cpp / OpenAI / Anthropic |
 | Git | libgit2 |
+| Memory Engine | Engram (HNSW + BM25 + cognitive graph + ONNX) |
 | Search | ignore + walkdir + grep-searcher |
 | State Management | Zustand |
 | CLI Parser | clap 4 |

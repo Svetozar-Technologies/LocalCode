@@ -366,6 +366,8 @@ mod tests {
             project_path: std::env::temp_dir().display().to_string(),
             current_file: None,
             provider: None,
+            engram: None,
+            engram_agent_id: None,
         }
     }
 

@@ -213,6 +213,37 @@ impl ModelManager {
                 family: "codellama".to_string(),
                 tags: vec!["coding".to_string(), "large".to_string()],
             },
+            // Nemotron-Mini 4B — NVIDIA's compact powerhouse for coding + reasoning
+            ModelCatalogEntry {
+                id: "nemotron-mini-4b-q4".to_string(),
+                name: "Nemotron-Mini 4B".to_string(),
+                description: "NVIDIA's compact model with strong coding and reasoning. \
+                    Trained with reward-aware preference optimization (RPO). \
+                    Excellent accuracy-to-size ratio for coding tasks.".to_string(),
+                url: "https://huggingface.co/bartowski/Nemotron-Mini-4B-Instruct-GGUF/resolve/main/Nemotron-Mini-4B-Instruct-Q4_K_M.gguf".to_string(),
+                filename: "Nemotron-Mini-4B-Instruct-Q4_K_M.gguf".to_string(),
+                size_bytes: 2_600_000_000,
+                quantization: "Q4_K_M".to_string(),
+                context_length: 4096,
+                parameters: "4B".to_string(),
+                family: "nemotron".to_string(),
+                tags: vec!["recommended".to_string(), "coding".to_string(), "reasoning".to_string(), "nvidia".to_string()],
+            },
+            // Nemotron-Mini 4B Q8 — higher quality quantization
+            ModelCatalogEntry {
+                id: "nemotron-mini-4b-q8".to_string(),
+                name: "Nemotron-Mini 4B (Q8)".to_string(),
+                description: "NVIDIA Nemotron-Mini at highest quality quantization. \
+                    Best accuracy from the 4B class. Needs ~5GB RAM.".to_string(),
+                url: "https://huggingface.co/bartowski/Nemotron-Mini-4B-Instruct-GGUF/resolve/main/Nemotron-Mini-4B-Instruct-Q8_0.gguf".to_string(),
+                filename: "Nemotron-Mini-4B-Instruct-Q8_0.gguf".to_string(),
+                size_bytes: 4_500_000_000,
+                quantization: "Q8_0".to_string(),
+                context_length: 4096,
+                parameters: "4B".to_string(),
+                family: "nemotron".to_string(),
+                tags: vec!["coding".to_string(), "reasoning".to_string(), "nvidia".to_string(), "high-quality".to_string()],
+            },
         ]
     }
 

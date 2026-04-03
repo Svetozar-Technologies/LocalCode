@@ -1,7 +1,7 @@
 use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 
-use localcode_core::agent::{AgentEngine, AgentEvent, ToolContext, ToolRegistry};
+use localcode_core::agent::{AgentEngine, AgentEvent, ToolRegistry};
 use localcode_core::agent::builtin;
 use localcode_core::agent::memory::MemoryManager;
 use localcode_core::agent::session::SessionStore;
@@ -126,11 +126,7 @@ pub async fn run_repl() -> Result<(), Box<dyn std::error::Error>> {
             let mut engine = AgentEngine::new(provider.clone(), registry);
             engine.initialize(&cwd);
 
-            let ctx = ToolContext {
-                project_path: cwd.clone(),
-                current_file: None,
-                provider: Some(provider.clone()),
-            };
+            let ctx = engine.create_tool_context(cwd.clone(), Some(provider.clone()));
 
             println!();
 

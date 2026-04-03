@@ -3,6 +3,7 @@ pub mod tools;
 pub mod builtin;
 pub mod context;
 pub mod memory;
+pub mod cognitive_memory;
 pub mod permissions;
 pub mod subagent;
 pub mod session;

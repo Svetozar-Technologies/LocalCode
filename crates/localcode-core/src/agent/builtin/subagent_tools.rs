@@ -67,6 +67,8 @@ impl Tool for DispatchSubagentTool {
             project_path: ctx.project_path.clone(),
             current_file: ctx.current_file.clone(),
             provider: ctx.provider.clone(),
+            engram: ctx.engram.clone(),
+            engram_agent_id: ctx.engram_agent_id,
         };
 
         let handle = manager.spawn_role(role, task.to_string(), subagent_ctx);

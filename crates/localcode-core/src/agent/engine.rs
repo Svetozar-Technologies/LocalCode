@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::context::ContextManager;
+use super::cognitive_memory::CognitiveMemory;
 use super::memory::MemoryManager;
 use super::session::{SessionState, SessionStore, session_from_state};
 use super::tools::{AgentStep, ToolContext, ToolRegistry, now_ms};
@@ -15,6 +16,7 @@ pub struct AgentEngine {
     system_prompt: String,
     context_manager: Option<ContextManager>,
     memory_manager: Option<MemoryManager>,
+    cognitive_memory: Option<CognitiveMemory>,
     session_state: Option<SessionState>,
     session_store: Option<SessionStore>,
     error_count: HashMap<String, usize>, // tool_name -> consecutive error count
@@ -37,6 +39,7 @@ impl AgentEngine {
             system_prompt: String::new(),
             context_manager: None,
             memory_manager: None,
+            cognitive_memory: None,
             session_state: None,
             session_store: None,
             error_count: HashMap::new(),
@@ -55,26 +58,51 @@ impl AgentEngine {
 
     /// Initialize memory, auto-discovery, and session for a project
     pub fn initialize(&mut self, project_path: &str) {
-        // Set up memory manager with auto-discovery
-        let mut memory = MemoryManager::new();
+        // Set up cognitive memory (Engram-backed)
+        match CognitiveMemory::open(project_path) {
+            Ok(mut cognitive) => {
+                // Initialize: auto-discover project + migrate legacy data
+                if let Err(e) = cognitive.initialize() {
+                    log::warn!("Cognitive memory init warning: {}", e);
+                }
 
-        // Auto-discover project if stale (> 1 hour)
-        if memory.needs_reindex(project_path, 3600) {
-            memory.auto_discover_project(project_path);
-            let _ = memory.save();
-        }
+                // Build enriched system prompt from cognitive memory
+                let memory_ctx = cognitive.build_context();
+                if !memory_ctx.is_empty() {
+                    if self.system_prompt.is_empty() {
+                        self.system_prompt = format!(
+                            "You are LocalCode Agent, an autonomous AI coding assistant.\n\n{}",
+                            memory_ctx
+                        );
+                    } else {
+                        self.system_prompt.push_str("\n\n");
+                        self.system_prompt.push_str(&memory_ctx);
+                    }
+                }
 
-        // Build enriched system prompt from memory
-        let memory_ctx = memory.build_context(project_path);
-        if !memory_ctx.is_empty() {
-            if self.system_prompt.is_empty() {
-                self.system_prompt = format!(
-                    "You are LocalCode Agent, an autonomous AI coding assistant.\n\n{}",
-                    memory_ctx
-                );
-            } else {
-                self.system_prompt.push_str("\n\n");
-                self.system_prompt.push_str(&memory_ctx);
+                self.cognitive_memory = Some(cognitive);
+            }
+            Err(e) => {
+                // Fallback to legacy memory if Engram fails
+                log::warn!("Engram init failed, using legacy memory: {}", e);
+                let mut memory = MemoryManager::new();
+                if memory.needs_reindex(project_path, 3600) {
+                    memory.auto_discover_project(project_path);
+                    let _ = memory.save();
+                }
+                let memory_ctx = memory.build_context(project_path);
+                if !memory_ctx.is_empty() {
+                    if self.system_prompt.is_empty() {
+                        self.system_prompt = format!(
+                            "You are LocalCode Agent, an autonomous AI coding assistant.\n\n{}",
+                            memory_ctx
+                        );
+                    } else {
+                        self.system_prompt.push_str("\n\n");
+                        self.system_prompt.push_str(&memory_ctx);
+                    }
+                }
+                self.memory_manager = Some(memory);
             }
         }
 
@@ -92,8 +120,11 @@ impl AgentEngine {
 
         // Initialize persistent session store
         self.session_store = Some(SessionStore::new());
+    }
 
-        self.memory_manager = Some(memory);
+    /// Get a reference to cognitive memory (if available)
+    pub fn cognitive_memory(&self) -> Option<&CognitiveMemory> {
+        self.cognitive_memory.as_ref()
     }
 
     fn build_system_prompt(&self, ctx: &ToolContext) -> String {
@@ -135,6 +166,23 @@ impl AgentEngine {
         )
     }
 
+    /// Create a ToolContext enriched with Engram cognitive memory
+    pub fn create_tool_context(&self, project_path: String, provider: Option<Arc<dyn LLMProvider>>) -> ToolContext {
+        let (engram, agent_id) = if let Some(ref cm) = self.cognitive_memory {
+            (Some(cm.engram()), Some(cm.agent_id()))
+        } else {
+            (None, None)
+        };
+
+        ToolContext {
+            project_path,
+            current_file: None,
+            provider,
+            engram,
+            engram_agent_id: agent_id,
+        }
+    }
+
     /// Track file modifications from tool results
     fn track_file_modification(&mut self, tool_name: &str, args: &serde_json::Value) {
         if let Some(ref mut session) = self.session_state {
@@ -153,20 +201,30 @@ impl AgentEngine {
     fn finalize_session(&mut self, task: &str, final_response: &str) {
         let summary_text: String = final_response.chars().take(500).collect();
 
+        let summary = super::memory::SessionSummary {
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+            task: task.to_string(),
+            files_modified: self.session_state.as_ref()
+                .map(|s| s.files_modified.clone())
+                .unwrap_or_default(),
+            tasks_completed: self.session_state.as_ref()
+                .map(|s| s.tasks_completed.clone())
+                .unwrap_or_default(),
+            summary: summary_text.clone(),
+        };
+
+        // Store in cognitive memory (Engram) if available
+        if let Some(ref cognitive) = self.cognitive_memory {
+            let _ = cognitive.store_session(&summary);
+        }
+
+        // Fallback to legacy memory manager
         if let (Some(ref mut memory), Some(ref session)) =
             (&mut self.memory_manager, &self.session_state)
         {
-            let summary = super::memory::SessionSummary {
-                timestamp: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs(),
-                task: task.to_string(),
-                files_modified: session.files_modified.clone(),
-                tasks_completed: session.tasks_completed.clone(),
-                summary: summary_text.clone(),
-            };
-
             memory.save_session_summary(&session.project_path, summary);
             let _ = memory.save();
         }

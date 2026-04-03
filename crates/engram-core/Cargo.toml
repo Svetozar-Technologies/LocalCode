@@ -1,0 +1,41 @@
+[package]
+name = "engram-core"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+bincode = { workspace = true }
+memmap2 = { workspace = true }
+petgraph = { workspace = true }
+uuid = { workspace = true }
+compact_str = { workspace = true }
+smallvec = { workspace = true }
+parking_lot = { workspace = true }
+dashmap = { workspace = true }
+crossbeam = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+ordered-float = { workspace = true }
+rand = { workspace = true }
+bytes = { workspace = true }
+crc32fast = { workspace = true }
+arc-swap = "1.9.0"
+ort = { workspace = true, optional = true }
+tokenizers = { workspace = true, optional = true }
+[features]
+default = []
+onnx = ["ort", "tokenizers"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+tempfile = "3"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "engram_bench"
+harness = false

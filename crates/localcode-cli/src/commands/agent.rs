@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 use std::sync::Arc;
-use localcode_core::agent::{AgentEngine, AgentEvent, ToolContext, ToolRegistry};
+use localcode_core::agent::{AgentEngine, AgentEvent, ToolRegistry};
 use localcode_core::agent::builtin;
 use localcode_core::config::Config;
 use localcode_core::llm::provider::*;
@@ -46,11 +46,7 @@ pub async fn run_agent(
     let mut engine = AgentEngine::new(provider.clone(), registry);
     engine.initialize(&cwd);
 
-    let ctx = ToolContext {
-        project_path: cwd,
-        current_file: None,
-        provider: Some(provider),
-    };
+    let ctx = engine.create_tool_context(cwd, Some(provider));
 
     println!();
 

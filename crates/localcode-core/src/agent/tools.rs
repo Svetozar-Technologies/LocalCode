@@ -11,6 +11,10 @@ pub struct ToolContext {
     pub project_path: String,
     pub current_file: Option<String>,
     pub provider: Option<Arc<dyn LLMProvider>>,
+    /// Engram cognitive memory engine (if available)
+    pub engram: Option<Arc<engram_core::Engram>>,
+    /// Agent ID for this project's memory namespace
+    pub engram_agent_id: Option<engram_core::AgentId>,
 }
 
 impl std::fmt::Debug for ToolContext {
@@ -19,6 +23,7 @@ impl std::fmt::Debug for ToolContext {
             .field("project_path", &self.project_path)
             .field("current_file", &self.current_file)
             .field("provider", &self.provider.as_ref().map(|p| p.name()))
+            .field("engram", &self.engram.is_some())
             .finish()
     }
 }

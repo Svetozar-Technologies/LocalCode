@@ -39,9 +39,11 @@ pub fn register_all(registry: &mut ToolRegistry) {
     registry.register(Arc::new(command_tools::SedTool));
     registry.register(Arc::new(command_tools::WcTool));
 
-    // Memory tools
+    // Memory tools (Engram-powered cognitive memory)
     registry.register(Arc::new(memory_tools::CodebaseSearchTool));
     registry.register(Arc::new(memory_tools::UpdateMemoryTool));
+    registry.register(Arc::new(memory_tools::MemoryRecallTool));
+    registry.register(Arc::new(memory_tools::MemoryForgetTool));
 
     // Web tools
     registry.register(Arc::new(web_tools::WebSearchTool));
