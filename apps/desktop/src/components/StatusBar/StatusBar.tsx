@@ -104,7 +104,7 @@ export default function StatusBar() {
             </span>
           </>
         )}
-        <span className="status-item">LocalCode v0.4.0</span>
+        <span className="status-item">LocalCode v0.5.0</span>
       </div>
     </div>
   );

@@ -20,7 +20,7 @@ beforeEach(() => {
 describe('StatusBar', () => {
   it('renders without crashing', () => {
     render(<StatusBar />);
-    expect(screen.getByText('LocalCode v0.4.0')).toBeDefined();
+    expect(screen.getByText('LocalCode v0.5.0')).toBeDefined();
   });
 
   it('shows branch name', () => {

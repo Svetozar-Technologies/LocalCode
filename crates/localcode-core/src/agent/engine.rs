@@ -338,6 +338,18 @@ impl AgentEngine {
                                 "\n\n[SYSTEM: This tool has failed 3 times. \
                                  Try a completely different approach or ask the user for help.]"
                             );
+                        } else if result.contains("ModuleNotFoundError") || result.contains("No module named") {
+                            result.push_str(
+                                "\n\n[SYSTEM: A Python module is missing. Do NOT rewrite the file. \
+                                 Use run_command to install the package: pip3 install <package_name>. \
+                                 Then retry the original command.]"
+                            );
+                        } else if result.contains("Cannot find module") || result.contains("MODULE_NOT_FOUND") {
+                            result.push_str(
+                                "\n\n[SYSTEM: A Node.js module is missing. Do NOT rewrite the file. \
+                                 Use run_command to install the package: npm install <package_name>. \
+                                 Then retry the original command.]"
+                            );
                         } else {
                             result.push_str(
                                 "\n\n[SYSTEM: The command failed. Read the error above carefully. \
@@ -533,6 +545,18 @@ Respond with ONE tool call now. Start by writing the code file."#,
                         result.push_str(
                             "\n\n[SYSTEM: This tool has failed 3 times. \
                              Try a completely different approach or ask the user for help.]"
+                        );
+                    } else if result.contains("ModuleNotFoundError") || result.contains("No module named") {
+                        result.push_str(
+                            "\n\n[SYSTEM: A Python module is missing. Do NOT rewrite the file. \
+                             Use run_command to install the package: pip3 install <package_name>. \
+                             Then retry the original command.]"
+                        );
+                    } else if result.contains("Cannot find module") || result.contains("MODULE_NOT_FOUND") {
+                        result.push_str(
+                            "\n\n[SYSTEM: A Node.js module is missing. Do NOT rewrite the file. \
+                             Use run_command to install the package: npm install <package_name>. \
+                             Then retry the original command.]"
                         );
                     } else {
                         result.push_str(
