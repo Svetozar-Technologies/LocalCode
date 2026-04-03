@@ -111,7 +111,7 @@ function getStepEmoji(step: AgentStep): string {
 
 function getFriendlyLabel(step: AgentStep): string {
   if (step.type === 'thinking') {
-    if (step.content?.startsWith('Planning')) return 'Planning your project...';
+    if (step.content?.startsWith('Preparing')) return 'Preparing execution...';
     if (step.content?.startsWith('Plan:')) return 'Here\'s the game plan';
     if (step.content?.includes('Step')) return step.content || 'Working on it...';
     if (step.content?.includes('failed')) return 'Switching to direct mode...';

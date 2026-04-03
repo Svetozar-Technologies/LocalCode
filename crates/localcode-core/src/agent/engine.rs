@@ -651,7 +651,7 @@ Respond with ONE tool call now. Start by writing the code file."#,
             tool: None,
             args: None,
             result: None,
-            content: Some("Planning your project... breaking it into manageable steps".to_string()),
+            content: Some("Preparing execution steps...".to_string()),
             timestamp: now_ms(),
         }));
 
