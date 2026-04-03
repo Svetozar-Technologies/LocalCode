@@ -1161,7 +1161,7 @@ export default function ChatPanel() {
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             placeholder={agentMode ? 'Describe a task... — type @ for context, / for commands' : 'Ask about your code... — type @ for context'}
-            rows={1}
+            rows={3}
             disabled={isAIStreaming}
           />
           {/* Voice input button (Feature 18) */}

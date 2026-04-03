@@ -642,8 +642,8 @@ html, body, #root {
   font-size: var(--font-size-sm);
   resize: none;
   outline: none;
-  min-height: 36px;
-  max-height: 120px;
+  min-height: 80px;
+  max-height: 200px;
 }
 .chat-input-area textarea:focus { border-color: var(--accent); }
 .chat-input-area button {
