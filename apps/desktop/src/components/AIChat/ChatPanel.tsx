@@ -221,37 +221,17 @@ export default function ChatPanel() {
           projectPath: projectPath || undefined,
           limit: 50,
         });
+        // Keep session list for history, but always start fresh
         setChatSessions(sessions);
 
-        if (sessions.length > 0) {
-          // Load most recent session
-          const latest = sessions[0];
-          setActiveChatSessionId(latest.id);
-          const messages = await invoke<{ id: string; chat_session_id: string; role: string; content: string; timestamp: number; agent_steps: string | null }[]>(
-            'chat_get_messages',
-            { sessionId: latest.id }
-          );
-          // Load persisted messages into Zustand
-          clearChat();
-          for (const msg of messages) {
-            addChatMessage({
-              id: msg.id,
-              role: msg.role as 'user' | 'assistant' | 'system',
-              content: msg.content,
-              timestamp: msg.timestamp,
-              agentSteps: msg.agent_steps ? JSON.parse(msg.agent_steps) : undefined,
-            });
-          }
-        } else {
-          // Create new session
-          const session = await invoke<ChatSessionInfo>('chat_create_session', {
-            projectPath: projectPath || '',
-            title: 'New Chat',
-          });
-          setActiveChatSessionId(session.id);
-          setChatSessions([session]);
-          clearChat();
-        }
+        // Create a new session — previous sessions accessible via /sessions
+        const session = await invoke<ChatSessionInfo>('chat_create_session', {
+          projectPath: projectPath || '',
+          title: 'New Chat',
+        });
+        setActiveChatSessionId(session.id);
+        setChatSessions([session, ...sessions]);
+        clearChat();
       } catch (err) {
         console.error('Failed to init chat session:', err);
       }
