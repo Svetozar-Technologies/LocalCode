@@ -200,6 +200,16 @@ export default function MonacoEditor({ onEditorMount }: MonacoEditorProps = {}) 
   const activeFileData = openFiles.find((f: OpenFile) => f.path === activeFile);
   const monacoTheme = THEME_MAP[theme] || 'localcode-dark';
 
+  // Dispose editor on unmount to prevent InstantiationService errors on HMR
+  useEffect(() => {
+    return () => {
+      editorRef.current?.dispose();
+      editorRef.current = null;
+      modelsRef.current.forEach((model) => model.dispose());
+      modelsRef.current.clear();
+    };
+  }, []);
+
   // Wire up inline completion
   useInlineCompletion(editorInstance);
 
